@@ -1,9 +1,9 @@
-# MicScaler 🎛️ (v1.14.0)
+# MicScaler 🎛️ (v1.15.0)
 **Multi-Instance Mathematical Scaling & DSP Engine**
 
 MicScaler is a professional-grade, zero-dependency web application designed for high-throughput mathematical processing of live audio data. 
 
-Unlike standard audio mixing concepts (where Gain is pre-processing and Volume is post-processing), **MicScaler treats audio as pure data**. It transforms your browser into a **3,000-channel mathematical processor**, isolating the processes of multiplicative scaling ($x$), phase-interleaving, sample-accurate chopping, and sub-millisecond gating.
+Unlike standard audio mixing concepts (where Gain is pre-processing and Volume is post-processing), **MicScaler treats audio as pure data**. It transforms your browser into a **3,000-channel mathematical processor**, isolating the processes of multiplicative scaling ($x$), phase-interleaving, sample-accurate chopping, sub-millisecond gating, and data recording.
 
 ---
 
@@ -21,12 +21,12 @@ Unlike standard audio mixing concepts (where Gain is pre-processing and Volume i
 ## ✨ Full List of Features
 
 ### 📡 Multi-Instance Processing (3,000 Tracks)
-*   **Triple-Engine Topology:** Run up to 3 isolated math engines simultaneously. Each engine can calculate up to 1,000 parallel tracks, allowing for a massive **3,000-track** total throughput.
+*   **Triple-Engine Topology:** Run up to 3 isolated math engines simultaneously. Each engine can calculate up to 1,000 parallel tracks, allowing for a massive **3,000-track** total throughput via C++ `AudioWorklet` threads.
 *   **Cascading Polarity Inversion:** Apply phase flipping via Master Invert, or use **Pattern Invert** to automatically flip interleaved tracks (e.g., every 2nd, 3rd, 4th, or 5th track) creating complex phase-canceled arrays.
 
 ### ⏱️ Sequence Automation (Auto-Step LFO)
 *   **Custom Boundary LFO:** Define arbitrary `Start` (High) and `End` (Low) scaling limits (e.g., from `1.0%` down to `0.0001%` or vice-versa) to automate the array spread over a user-defined duration.
-*   **Drift-Proof Audio Clock:** The LFO is driven by the native hardware audio sample rate (48,000Hz) inside the C++ background thread. **It is 100% immune to browser tab-throttling** and will loop perfectly in the background indefinitely.
+*   **Drift-Proof Audio Clock:** The LFO is driven by the native hardware audio sample rate (48,000Hz) inside the background thread. **It is 100% immune to browser tab-throttling** and will loop perfectly in the background indefinitely.
 *   **Logarithmic Sweeps:** Interpolates logarithmically to guarantee perfectly smooth perceptual sweeps through microscopic decimal fractions in both ascending and descending directions.
 
 ### 🔪 AuraConv Interval Engine
@@ -39,29 +39,13 @@ Unlike standard audio mixing concepts (where Gain is pre-processing and Volume i
 *   **Math Input Auto-Toggle:** A digital gate that mathematically zeroes out the bit-stream feeding *into* the math engines.
 *   **Speaker Output Auto-Toggle:** Physically modulates the hardware speaker output using a 10kHz square-wave oscillator attached to a `GainNode`. Allows for brutal Amplitude Modulation (AM) effects down to `0.1ms`.
 
-### 💾 Native Recording & Export
+### 💾 Native Recording & Export (Background-Proof)
 *   **Zero-Dependency WAV Compiler:** Bypasses compressed browser audio. Captures the raw `Float32` data array and mathematically compiles a valid 16-bit Mono `RIFF/WAVE` header on the fly inside the browser.
 *   **MediaRecorder Support:** Supports highly compressed OPUS (`.webm`) and lossless FLAC exports.
-*   **Auto-Stop Timers:** Enter a minute limit to record unattended. The app will automatically halt, compile, and trigger a local file download when the timer hits, preventing RAM overflows.
+*   **Hardware-Clock Auto-Stop:** Set a minute limit to record unattended. The recording engine evaluates time based on the audio interface's hardware clock (`audioContext.currentTime`), guaranteeing the recording will cleanly auto-stop, compile, and download even if the phone screen locks or the tab goes into the background.
 
 ### 📱 Hardware Control
 *   **Mobile Audio Routing Override:** Android and iOS natively hijack microphone streams for VoIP echo cancellation, routing audio to the quiet top earpiece. The **Earpiece Mode** toggle overrides WebRTC constraints (`echoCancellation: false`), forcing the OS to push uncompressed signal out of the main bottom loudspeakers.
-
----
-
-## 📈 Architecture & Performance Improvements (v1.14.0)
-
-MicScaler has been entirely re-architected to bypass browser bottlenecks, shifting from a UI-bound visualizer to an asynchronous **AudioWorklet DSP Engine**. To maintain our strict "Single HTML File" rule, the C++ style processor class is converted to a virtual Blob in the device's RAM and injected dynamically at runtime.
-
-| Metric | Legacy (v1.9.0) | Current (v1.14.0) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Max Throughput** | 1,000 Tracks | **3,000 Tracks** | **+200% Capacity** |
-| **RAM Footprint** | ~280 MB + GC Spikes | **~55 MB** | **-80% Memory Bloat** |
-| **Main UI CPU Load** | 85% - 100% | **1% - 3%** | The UI thread is virtually asleep, purely drawing the Master Canvas. |
-| **Audio Thread Load** | 0% (Forced to UI) | **~10%** | Math runs entirely on a dedicated, high-priority background core. |
-| **Audio Stability** | Severe Clicking / Pops | **Flawless** | 100% immune to UI freezing, scrolling, or background tab sleeping. |
-
-*   **The "Clicking" Fix:** In previous versions, rendering 1,000 text boxes on the DOM caused mobile CPUs (like the S24+) to drop audio frames, resulting in audible hardware clicking and amplifier power-cycling. By deleting the DOM bloat and moving the math to a dedicated background core, MicScaler now runs **144 Million math operations per second** completely glitch-free.
 
 ---
 
@@ -84,3 +68,4 @@ MicScaler has been entirely re-architected to bypass browser bottlenecks, shifti
 
 ## ⚠️ Requirements & Safety
 *   **Environment:** Must be run on `localhost` or an `https` connection, as browsers strictly block microphone access on unsecure `http://` connections.
+*   **Acoustic Feedback:** Using the "Speaker Out" feature on laptops/phones without headphones will likely result in an instantaneous and severe acoustic feedback loop. Proceed with caution.
