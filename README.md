@@ -1,71 +1,47 @@
-# MicScaler 🎛️ (v1.15.0)
-**Multi-Instance Mathematical Scaling & DSP Engine**
+# MicScaler 🎛️ (v1.16.0)
+**Multi-Instance Mathematical Scaling & Spectral Engine**
 
 MicScaler is a professional-grade, zero-dependency web application designed for high-throughput mathematical processing of live audio data. 
 
-Unlike standard audio mixing concepts (where Gain is pre-processing and Volume is post-processing), **MicScaler treats audio as pure data**. It transforms your browser into a **3,000-channel mathematical processor**, isolating the processes of multiplicative scaling ($x$), phase-interleaving, sample-accurate chopping, sub-millisecond gating, and data recording.
+It transforms your browser into a **3,000-channel mathematical processor**, isolating the processes of frequency bandpassing, multiplicative scaling, phase-interleaving, sample-accurate chopping, sub-millisecond gating, and background-proof data recording.
 
 ---
 
 ## 🚀 Quick Start
-1. Download the `index.html` file. (No installation, Node.js, or external assets required).
-2. Open it in any modern web browser (Chrome, Edge, Safari, Firefox).
-3. Toggle up to **3 Independent Engines** on the dashboard.
-4. Click **Start Microphone**.
+1. Download the `index.html` file. (No installation required).
+2. Open it in any modern web browser.
+3. **Shape:** Enable the Pre-Scale Bandpass to isolate specific frequencies, and verify the shape on the FFT Spectral Graph.
+4. **Scale:** Toggle up to 3 Independent Engines and hit **Start Microphone**.
 5. **Automate:** Use the Auto-Step LFO to create custom exponential sweeps across your track arrays.
-6. **Gate & Chop:** Enable the AuraConv comb filter or the sub-millisecond hardware gates.
-7. **Record:** Set an auto-stop limit and capture the manipulated soundscape natively to `.wav`.
+6. **Record:** Set an auto-stop limit and capture the manipulated soundscape natively to `.wav`.
+
+---
+
+## 📊 The Analysis Dashboard
+MicScaler now features a dual-canvas real-time visualizer layout.
+*   **Oscilloscope (Time Domain):** Shows the final mathematical output waveform resulting from the C++ AudioWorklet thread.
+*   **FFT Spectral Distribution (Frequency Domain):** Shows a real-time Fast Fourier Transform (FFT) analysis of your raw microphone hardware. 
+    *   **Gray Background:** The total acoustic energy captured by the physical microphone.
+    *   **Green Outline:** The isolated frequency distribution actively passing through the Bandpass Filter and into the math engine.
 
 ---
 
 ## ✨ Full List of Features
 
-### 📡 Multi-Instance Processing (3,000 Tracks)
-*   **Triple-Engine Topology:** Run up to 3 isolated math engines simultaneously. Each engine can calculate up to 1,000 parallel tracks, allowing for a massive **3,000-track** total throughput via C++ `AudioWorklet` threads.
-*   **Cascading Polarity Inversion:** Apply phase flipping via Master Invert, or use **Pattern Invert** to automatically flip interleaved tracks (e.g., every 2nd, 3rd, 4th, or 5th track) creating complex phase-canceled arrays.
+### 📡 Spectral & Multi-Instance Processing
+*   **Pre-Scale Bandpass Filter:** Isolate high or low frequencies *before* they hit the math engine via a dual-biquad (HP/LP) node cluster.
+*   **Triple-Engine Topology:** Run up to 3 isolated math engines simultaneously, driving up to **3,000 parallel tracks**.
+*   **Cascading Polarity Inversion:** Apply phase flipping via Master Invert, or use **Pattern Invert** to automatically flip interleaved tracks (e.g., every 2nd, 3rd, 4th, or 5th track).
 
 ### ⏱️ Sequence Automation (Auto-Step LFO)
-*   **Custom Boundary LFO:** Define arbitrary `Start` (High) and `End` (Low) scaling limits (e.g., from `1.0%` down to `0.0001%` or vice-versa) to automate the array spread over a user-defined duration.
-*   **Drift-Proof Audio Clock:** The LFO is driven by the native hardware audio sample rate (48,000Hz) inside the background thread. **It is 100% immune to browser tab-throttling** and will loop perfectly in the background indefinitely.
-*   **Logarithmic Sweeps:** Interpolates logarithmically to guarantee perfectly smooth perceptual sweeps through microscopic decimal fractions in both ascending and descending directions.
+*   **Custom Boundary LFO:** Define arbitrary `Start` (High) and `End` (Low) scaling limits to automate the array spread.
+*   **Drift-Proof Audio Clock:** The LFO is driven by the native hardware audio sample rate (48,000Hz) inside the C++ background thread. **It is 100% immune to browser tab-throttling** and will loop endlessly in the background.
 
 ### 🔪 AuraConv Interval Engine
-*   **Sample-Accurate Comb Filter:** Tracks the absolute hardware sample counter to perfectly chop data arrays into exact $N$-sample blocks (e.g., every 50 or 100 samples).
-*   **Burst & Gap Modes:** Choose to `Allow` audio through in rhythmic bursts or `Block` it to create rhythmic silence gaps.
-*   **Synthetic Convolution Reverb:** Mathematically generates a lush, 2-second exponential-decay white-noise array on the fly to act as an Impulse Response (IR) smear.
-*   **HRTF 3D Rotation:** Real-time spatial rotation utilizing Web Audio's `PannerNode`, violently panning the chopped signal around the listener's head.
+*   **Sample-Accurate Comb Filter:** Blocks or allows audio in exact $N$-sample blocks (e.g., every 50 or 100 samples) at the hardware level.
+*   **Synthetic Convolution Reverb & HRTF:** Mathematically generates a 2-second white-noise exponential-decay impulse response on the fly to smear transients, and dynamically rotates the audio in 3D space around the listener's head.
 
-### 🎚️ Dual-Layer Sub-Millisecond Gating
-*   **Math Input Auto-Toggle:** A digital gate that mathematically zeroes out the bit-stream feeding *into* the math engines.
-*   **Speaker Output Auto-Toggle:** Physically modulates the hardware speaker output using a 10kHz square-wave oscillator attached to a `GainNode`. Allows for brutal Amplitude Modulation (AM) effects down to `0.1ms`.
-
-### 💾 Native Recording & Export (Background-Proof)
-*   **Zero-Dependency WAV Compiler:** Bypasses compressed browser audio. Captures the raw `Float32` data array and mathematically compiles a valid 16-bit Mono `RIFF/WAVE` header on the fly inside the browser.
-*   **MediaRecorder Support:** Supports highly compressed OPUS (`.webm`) and lossless FLAC exports.
-*   **Hardware-Clock Auto-Stop:** Set a minute limit to record unattended. The recording engine evaluates time based on the audio interface's hardware clock (`audioContext.currentTime`), guaranteeing the recording will cleanly auto-stop, compile, and download even if the phone screen locks or the tab goes into the background.
-
-### 📱 Hardware Control
-*   **Mobile Audio Routing Override:** Android and iOS natively hijack microphone streams for VoIP echo cancellation, routing audio to the quiet top earpiece. The **Earpiece Mode** toggle overrides WebRTC constraints (`echoCancellation: false`), forcing the OS to push uncompressed signal out of the main bottom loudspeakers.
-
----
-
-## 🗺️ Roadmap of Future Features
-
-### Phase 1: Advanced DSP & Data Manipulation
-*   **Offset Engine (+):** Implement `(Input * Scale) + Offset` logic to shift signal baselines for sensor calibration and bias correction.
-*   **Hard Clipping & Clamping:** Add user-defined mathematical limits to introduce intentional saturation, data-clipping, and threshold bounds across the engine arrays.
-*   **DC Offset Filtering:** A dedicated high-pass filter at 5Hz to mathematically center raw Android microphone feeds that suffer from native electrical offsets.
-
-### Phase 2: Hardware & Edge Deployments
-*   **The "Wall Plug" Port (Python/Raspberry Pi):** Refactor the core Math Engine into a vectorized NumPy/Python script to be flashed onto headless Raspberry Pi Zero / ESP32 hardware. This will allow for dedicated hardware I2S microphone processing in embedded acoustic environments.
-*   **Hardware Output Selection (`setSinkId`):** Utilize experimental browser APIs to allow users to explicitly define which physical audio output channel (Bluetooth, USB interface, specific Studio Monitor pairs) the app routes the data to.
-
-### Phase 3: External Data Routing
-*   **WebSockets & OSC (Open Sound Control):** Broadcast the processed mathematical results of the instances over `localhost` to drive reactive data visualization in external software like TouchDesigner, Resolume, or Python pipelines.
-*   **Web MIDI API Integration:** Convert the scaled, multi-track data outputs into continuous MIDI Control Change (CC) messages to drive DAW parameters (e.g., Engine 1 controls a cutoff filter, Engine 2 controls reverb decay).
-
----
-
-## ⚠️ Requirements & Safety
-*   **Environment:** Must be run on `localhost` or an `https` connection, as browsers strictly block microphone access on unsecure `http://` connections.
-*   **Acoustic Feedback:** Using the "Speaker Out" feature on laptops/phones without headphones will likely result in an instantaneous and severe acoustic feedback loop. Proceed with caution.
+### 🎚️ Sub-Millisecond Gating & Native Recording
+*   **Dual-Layer Gating:** Separate logic for Math Input Data Chops vs Hardware Speaker Modulation (up to 10,000Hz).
+*   **Zero-Dependency WAV Compiler:** Captures the raw `Float32` data array and mathematically compiles a valid 16-bit Mono `RIFF/WAVE` file inside the browser. Hardware-clocked to auto-stop recordings even if the screen locks.
+*   **Mobile Audio Routing Override:** Bypasses Android and iOS VoIP echo cancellation constraints (`echoCancellation: false`), forcing the OS to push uncompressed signal out of the main bottom loudspeakers.
