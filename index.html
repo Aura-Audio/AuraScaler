@@ -3,16 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - Multi-Instance Data Engine (v1.15.0)</title>
+    <title>MicScaler - Multi-Instance Data Engine (v1.16.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
             --danger: #cf6679; --info: #03dac6; --warn: #ffb300; --record: #ff1744; --aura: #00e5ff;
-            --text: #e0e0e0; --border: #333; --led-off: #333; --led-on: #0cf50c;
+            --bp: #aeea00; --text: #e0e0e0; --border: #333; --led-off: #333; --led-on: #0cf50c;
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-        .header { text-align: center; margin-bottom: 20px; width: 100%; max-width: 800px; }
-        #master-canvas { width: 100%; height: 80px; background: #000; border-radius: 8px; border: 1px solid var(--primary); margin-top: 10px; }
+        .header { text-align: center; margin-bottom: 10px; width: 100%; max-width: 800px; }
+        
+        /* Analysis Dashboard */
+        .canvas-row { display: flex; flex-wrap: wrap; gap: 15px; width: 100%; max-width: 1400px; justify-content: center; margin-bottom: 15px; }
+        .canvas-container { flex: 1 1 300px; display: flex; flex-direction: column; width: 100%; max-width: 600px; }
+        .canvas-label { font-size: 0.85em; color: var(--info); margin-bottom: 5px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+        #master-canvas, #fft-canvas { width: 100%; height: 100px; background: #000; border-radius: 8px; border: 1px solid var(--border); box-shadow: inset 0 0 10px rgba(0,0,0,0.8); }
         
         .controls { background: var(--surface); padding: 15px 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: center; max-width: 1400px; width: 100%; box-sizing: border-box; }
         .control-group { display: flex; align-items: center; gap: 10px; }
@@ -29,15 +34,12 @@
         select.ui-num { cursor: pointer; }
 
         /* INSTANCE DASHBOARD STYLES */
-        #instances-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; width: 100%; max-width: 1400px; margin-top: 10px; }
+        #instances-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; width: 100%; max-width: 1400px; margin-bottom: 10px; }
         .instance-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.3s; }
         .instance-card.active-card { border-color: var(--primary); }
-        
         .instance-header { display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-        
         .led-indicator { width: 14px; height: 14px; border-radius: 50%; background-color: var(--led-off); box-shadow: 0 0 5px #000; transition: background-color 0.1s; }
         .led-indicator.on { background-color: var(--led-on); box-shadow: 0 0 10px var(--led-on); }
-        
         .instance-row { display: flex; justify-content: space-between; align-items: center; }
         .readout { background: #000; color: var(--info); font-family: monospace; padding: 5px 10px; border-radius: 4px; font-size: 1.1em; width: 80px; text-align: right; border: 1px solid #444; }
     </style>
@@ -47,21 +49,46 @@
     <div class="header">
         <h1>MicScaler <span style="font-size: 0.5em; color: var(--info);">(Multi-Instance)</span></h1>
         <p>Mathematical Multiplicative Scaling Engine</p>
-        <canvas id="master-canvas"></canvas>
     </div>
 
-    <!-- ROW 1: ENGINES DASHBOARD -->
-    <div id="instances-container">
-        <!-- Instance Cards injected via JS -->
+    <!-- ANALYSIS DASHBOARD -->
+    <div class="canvas-row">
+        <div class="canvas-container">
+            <div class="canvas-label">Oscilloscope (Time Domain Output)</div>
+            <canvas id="master-canvas"></canvas>
+        </div>
+        <div class="canvas-container">
+            <div class="canvas-label">FFT Spectral Dist. <span style="color:#aaa; font-weight:normal;">(Raw: Gray | Filtered: <span style="color:var(--bp);">Green</span>)</span></div>
+            <canvas id="fft-canvas"></canvas>
+        </div>
     </div>
 
-    <!-- ROW 2: AURACONV ENGINE -->
-    <div class="controls" style="border-color: var(--aura); margin-top: 20px;">
+    <!-- ROW 1: PRE-PROCESSING (BANDPASS) -->
+    <div class="controls" style="border-color: var(--bp);">
+        <button id="mic-btn">Start Microphone</button>
+        <div class="control-group divider">
+            <label style="color: var(--bp); font-weight:bold;">Pre-Scale Bandpass:</label>
+            <input type="checkbox" id="bp-enable"> <span style="font-size:0.9em;">Enable</span>
+        </div>
+        <div class="control-group divider">
+            <label>Low Cut (Hz):</label>
+            <input type="number" id="bp-low" class="ui-num" min="20" max="20000" value="80" style="width: 70px;">
+        </div>
+        <div class="control-group divider">
+            <label>High Cut (Hz):</label>
+            <input type="number" id="bp-high" class="ui-num" min="20" max="20000" value="3000" style="width: 70px;">
+        </div>
+    </div>
+
+    <!-- ROW 2: ENGINES DASHBOARD -->
+    <div id="instances-container"></div>
+
+    <!-- ROW 3: AURACONV ENGINE -->
+    <div class="controls" style="border-color: var(--aura); margin-top: 10px;">
         <div class="control-group">
             <label style="color: var(--aura); font-weight:bold;">AuraConv Comb Filter: </label>
             <input type="number" id="ac-samples" class="ui-num" min="1" max="10000" value="100" style="width: 60px;">
             <span style="font-size:0.8em; color:#aaa;">Samples</span>
-            
             <select id="ac-mode" class="ui-num" style="margin-left: 5px;">
                 <option value="burst">Burst (Allow)</option>
                 <option value="gap">Gap (Block)</option>
@@ -72,10 +99,9 @@
         <div class="control-group divider"><input type="checkbox" id="ac-rotate"> <span style="font-size:0.9em; font-weight:bold;">HRTF 3D Rotation</span></div>
     </div>
 
-    <!-- ROW 3: HARDWARE GATING & ROUTING -->
+    <!-- ROW 4: HARDWARE GATING & ROUTING -->
     <div class="controls" style="border-color: var(--warn);">
-        <button id="mic-btn">Start Microphone</button>
-        <div class="control-group divider">
+        <div class="control-group">
             <label title="Chops the data feeding into the engines" style="color: var(--warn); font-weight:bold;">Math Gate (ms): </label>
             <input type="number" id="gate-ms" class="ui-num" min="0.1" max="1000" step="0.1" value="100" style="width: 65px;">
             <input type="checkbox" id="gate-enable-toggle"> <span style="font-size:0.9em;">Enable</span>
@@ -89,7 +115,7 @@
         <div class="control-group divider"><input type="checkbox" id="audio-output-toggle"><label style="font-weight:bold;">Speaker Out <span style="color:var(--danger); font-size: 0.8em;">(!Feedback)</span></label></div>
     </div>
 
-    <!-- ROW 4: RECORDING & EXPORT -->
+    <!-- ROW 5: RECORDING & EXPORT -->
     <div class="controls" style="border-color: var(--record);">
         <button id="record-btn" style="background-color: var(--surface); border: 2px solid var(--record); color: white;">⏺ Start Recording</button>
         <div class="control-group divider"><label style="color: var(--text);">Auto-Stop (Mins): </label><input type="number" id="record-limit-mins" class="ui-num" min="0.1" max="120" step="0.1" value="5" style="width: 60px;"></div>
@@ -104,7 +130,6 @@
             constructor() {
                 super();
                 this.globalSampleCounter = 0;
-                
                 this.config = {
                     inGateEnabled: false, inGateSamples: 4800,
                     acEnabled: false, acBurst: true, acSamples: 100,
@@ -114,7 +139,6 @@
                         { active: false, tracks: 100, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 15, currentStep: 0.0001, lfoSamples: 0 }
                     ]
                 };
-
                 this.port.onmessage = (e) => {
                     if (e.data.type === 'config') this.config = { ...this.config, ...e.data };
                     if (e.data.type === 'updateEngine') {
@@ -123,12 +147,10 @@
                 };
                 this.statusFrameCount = 0;
             }
-
             process(inputs, outputs) {
                 const input = inputs[0];
                 const output = outputs[0];
                 if (!input || !input.length) return true;
-
                 const channelIn = input[0];
                 const channelOut = output[0];
                 const numFrames = channelIn.length;
@@ -139,7 +161,6 @@
                         const totalSamples = eng.lfoTime * sampleRate;
                         eng.lfoSamples += numFrames;
                         if (eng.lfoSamples >= totalSamples) eng.lfoSamples %= totalSamples; 
-
                         let progress = eng.lfoSamples / totalSamples;
                         let high = Math.max(0.000001, eng.lfoStart);
                         let low = Math.max(0.000001, eng.lfoEnd);
@@ -154,7 +175,6 @@
                         const chunk = Math.floor(this.globalSampleCounter / this.config.acSamples);
                         if (this.config.acBurst ? !(chunk % 2 === 0) : (chunk % 2 === 0)) allowed = false;
                     }
-
                     const val = allowed ? channelIn[i] : 0;
                     channelOut[i] = val; 
 
@@ -183,29 +203,55 @@
         const workletUrl = URL.createObjectURL(workletBlob);
 
         // --- GLOBAL VARIABLES ---
-        let audioContext, analyser, microphone, stream, dataArray;
+        let audioContext, microphone, stream;
         let isRunning = false, animationId;
         
         let liveMathNode, fxHubIn, fxHubOut, convolver, panner, outputGain, chopperOsc, chopperGain; 
         
-        // Recording State Fixes
-        let isRecording = false, mediaRecorder = null, recordedChunks =[];
-        let recordStartTime = 0, recordLimitSecs = 300;
+        // Visualizer Nodes
+        let outAnalyser, outDataArray;
+        
+        // PRE-SCALE BANDPASS NODES
+        let hpFilter, lpFilter, rawAnalyser, filteredAnalyser, rawFreqData, filteredFreqData;
+        let micBypassGain, filteredGain;
+
+        let isRecording = false, mediaRecorder = null, recordedChunks =[], recordStartTime = 0, recordLimitSecs = 300;
         let scriptProcessor = null, wavAudioBuffer =[]; 
 
         const micBtn = document.getElementById('mic-btn');
         const audioOutputToggle = document.getElementById('audio-output-toggle');
         const echoToggle = document.getElementById('echo-toggle');
+        
         const masterCanvas = document.getElementById('master-canvas');
         const masterCtx = masterCanvas.getContext('2d', { alpha: false });
         
+        const fftCanvas = document.getElementById('fft-canvas');
+        const fftCtx = fftCanvas.getContext('2d', { alpha: false });
+        
+        // --- BANDPASS LISTENERS ---
+        function updateBandpass() {
+            if (!audioContext) return;
+            const enabled = document.getElementById('bp-enable').checked;
+            const low = parseFloat(document.getElementById('bp-low').value) || 80;
+            const high = parseFloat(document.getElementById('bp-high').value) || 3000;
+            
+            hpFilter.frequency.setTargetAtTime(low, audioContext.currentTime, 0.05);
+            lpFilter.frequency.setTargetAtTime(high, audioContext.currentTime, 0.05);
+            
+            // Crossfade between Raw Mic and Filtered Mic into the Worklet
+            micBypassGain.gain.setTargetAtTime(enabled ? 0 : 1, audioContext.currentTime, 0.05);
+            filteredGain.gain.setTargetAtTime(enabled ? 1 : 0, audioContext.currentTime, 0.05);
+        }['bp-enable', 'bp-low', 'bp-high'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updateBandpass);
+            document.getElementById(id).addEventListener('input', updateBandpass);
+        });
+
         // --- INSTANCE DASHBOARD GENERATOR ---
         const instancesContainer = document.getElementById('instances-container');
         for(let i=0; i<3; i++) {
             instancesContainer.innerHTML += `
             <div class="instance-card" id="card-${i}">
-                <div class="instance-header">
-                    <span>Engine ${i + 1}</span>
+                <div class="instance-header"><span>Engine ${i + 1}</span>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <input type="checkbox" id="eng-active-${i}" ${i===0 ? 'checked' : ''}> Enable
                         <div id="led-${i}" class="led-indicator ${i===0 ? 'on' : ''}"></div>
@@ -246,13 +292,8 @@
 
             const card = document.getElementById(`card-${idx}`);
             const led = document.getElementById(`led-${idx}`);
-            if(config.active) {
-                card.classList.add('active-card');
-                if(isRunning) led.classList.add('on');
-            } else {
-                card.classList.remove('active-card');
-                led.classList.remove('on');
-            }
+            if(config.active) { card.classList.add('active-card'); if(isRunning) led.classList.add('on'); } 
+            else { card.classList.remove('active-card'); led.classList.remove('on'); }
         }
 
         for(let i=0; i<3; i++) {['eng-active-', 'eng-tracks-', 'eng-pat-', 'eng-start-', 'eng-end-', 'eng-time-'].forEach(prefix => {
@@ -285,6 +326,7 @@
             document.getElementById(id).addEventListener('input', updateGlobalWorklet);
         });
 
+        // --- HARDWARE GATING & ROUTING ---
         const outGateToggleBtn = document.getElementById('out-gate-enable-toggle');
         const outGateMsInput = document.getElementById('out-gate-ms');
 
@@ -314,9 +356,8 @@
         echoToggle.addEventListener('change', () => { if (isRunning) { toggleMic(); setTimeout(toggleMic, 200); }});
 
         function generateImpulseResponse(ctx) {
-            const sampleRate = ctx.sampleRate;
-            const length = sampleRate * 2.0; 
-            const impulse = ctx.createBuffer(2, length, sampleRate);
+            const length = ctx.sampleRate * 2.0; 
+            const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
             for (let c = 0; c < 2; c++) {
                 const channelData = impulse.getChannelData(c);
                 for (let i = 0; i < length; i++) channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3);
@@ -352,50 +393,65 @@
                 const useEcho = echoToggle.checked;
                 stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: useEcho, noiseSuppression: useEcho, autoGainControl: useEcho } });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
                 await audioContext.audioWorklet.addModule(workletUrl);
-                microphone = audioContext.createMediaStreamSource(stream);
-                liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor');
                 
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                // --- SETUP BANDPASS & FFT NODES ---
+                hpFilter = audioContext.createBiquadFilter(); hpFilter.type = 'highpass';
+                lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
+                
+                rawAnalyser = audioContext.createAnalyser(); rawAnalyser.fftSize = 2048;
+                filteredAnalyser = audioContext.createAnalyser(); filteredAnalyser.fftSize = 2048;
+                
+                rawFreqData = new Uint8Array(rawAnalyser.frequencyBinCount);
+                filteredFreqData = new Uint8Array(filteredAnalyser.frequencyBinCount);
+
+                micBypassGain = audioContext.createGain(); micBypassGain.gain.value = 1;
+                filteredGain = audioContext.createGain(); filteredGain.gain.value = 0;
+
+                // Wire FFT graph feeds
+                microphone.connect(rawAnalyser);
+                microphone.connect(hpFilter); hpFilter.connect(lpFilter); lpFilter.connect(filteredAnalyser);
+                
+                // Wire to Math Engine
+                microphone.connect(micBypassGain);
+                lpFilter.connect(filteredGain);
+
+                liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor');
                 liveMathNode.port.onmessage = (e) => {
                     if (e.data.type === 'status') {
                         for(let i=0; i<3; i++) {
-                            if(document.getElementById(`eng-active-${i}`).checked) {
-                                document.getElementById(`eng-readout-${i}`).innerText = e.data.steps[i].toFixed(4);
-                            }
+                            if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`eng-readout-${i}`).innerText = e.data.steps[i].toFixed(4);
                         }
                     }
                 };
 
+                updateBandpass();
                 updateGlobalWorklet();
                 for(let i=0; i<3; i++) sendEngineConfig(i); 
 
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 1024;
-                dataArray = new Float32Array(analyser.frequencyBinCount);
+                outAnalyser = audioContext.createAnalyser(); outAnalyser.fftSize = 1024;
+                outDataArray = new Float32Array(outAnalyser.frequencyBinCount);
 
-                fxHubIn = audioContext.createGain();
-                fxHubOut = audioContext.createGain();
-                outputGain = audioContext.createGain();
-                outputGain.gain.value = 1.0;
+                fxHubIn = audioContext.createGain(); fxHubOut = audioContext.createGain();
+                outputGain = audioContext.createGain(); outputGain.gain.value = 1.0;
 
-                convolver = audioContext.createConvolver();
-                convolver.buffer = generateImpulseResponse(audioContext);
-                panner = audioContext.createPanner();
-                panner.panningModel = 'HRTF';
+                convolver = audioContext.createConvolver(); convolver.buffer = generateImpulseResponse(audioContext);
+                panner = audioContext.createPanner(); panner.panningModel = 'HRTF';
                 
-                chopperOsc = audioContext.createOscillator();
-                chopperOsc.type = 'square';
-                chopperGain = audioContext.createGain();
-                chopperGain.gain.value = 0.5; 
-                chopperOsc.connect(chopperGain);
-                chopperOsc.start();
+                chopperOsc = audioContext.createOscillator(); chopperOsc.type = 'square';
+                chopperGain = audioContext.createGain(); chopperGain.gain.value = 0.5; 
+                chopperOsc.connect(chopperGain); chopperOsc.start();
 
-                microphone.connect(liveMathNode);
-                liveMathNode.connect(analyser);
-                analyser.connect(fxHubIn);
+                // Connect Main Signal Chain
+                micBypassGain.connect(liveMathNode);
+                filteredGain.connect(liveMathNode);
+                liveMathNode.connect(outAnalyser);
+                outAnalyser.connect(fxHubIn);
                 updateFXRouting();
                 fxHubOut.connect(outputGain);
+                
                 if (audioOutputToggle.checked) outputGain.connect(audioContext.destination);
                 updateOutputGate();
 
@@ -403,17 +459,17 @@
                 micBtn.classList.add('active');
                 isRunning = true;
                 
-                for(let i=0; i<3; i++) {
-                    if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`led-${i}`).classList.add('on');
-                }
+                for(let i=0; i<3; i++) { if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`led-${i}`).classList.add('on'); }
 
-                masterCanvas.width = masterCanvas.clientWidth;
-                masterCanvas.height = masterCanvas.clientHeight;
+                // Sync canvas resolutions
+                masterCanvas.width = masterCanvas.clientWidth; masterCanvas.height = masterCanvas.clientHeight;
+                fftCanvas.width = fftCanvas.clientWidth; fftCanvas.height = fftCanvas.clientHeight;
+                
                 processVisualizer();
             } catch (err) { alert('Error accessing microphone: ' + err); }
         }
 
-        // --- RECORDING ENGINE FIXES ---
+        // --- RECORDING ENGINE ---
         const recordBtn = document.getElementById('record-btn');
         const recordLimitInput = document.getElementById('record-limit-mins');
         const recordFormatInput = document.getElementById('record-format');
@@ -425,70 +481,43 @@
         });
 
         function startRecording() {
-            const format = recordFormatInput.value;
             recordLimitSecs = (parseFloat(recordLimitInput.value) || 5) * 60;
-            isRecording = true;
-            recordStartTime = audioContext.currentTime; // Audio Thread Time (Immune to background tabs)
-            
-            recordBtn.innerText = '⏹ Stop Recording';
-            recordBtn.classList.add('record-active');
+            isRecording = true; recordStartTime = audioContext.currentTime; 
+            recordBtn.innerText = '⏹ Stop Recording'; recordBtn.classList.add('record-active');
             recordStatus.innerText = `Recording (${(recordLimitSecs/60).toFixed(1)}m limit)...`;
 
             const dest = audioContext.createMediaStreamDestination();
             outputGain.connect(dest);
 
-            if (format === 'wav') {
+            if (recordFormatInput.value === 'wav') {
                 wavAudioBuffer =[];
                 scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-                dest.connect(scriptProcessor);
-                scriptProcessor.connect(audioContext.destination); 
-                
+                dest.connect(scriptProcessor); scriptProcessor.connect(audioContext.destination); 
                 scriptProcessor.onaudioprocess = (e) => {
                     if (!isRecording) return;
                     wavAudioBuffer.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-                    // Check AudioClock to enforce stop limit regardless of tab state
-                    if (audioContext.currentTime - recordStartTime >= recordLimitSecs) {
-                        stopRecording();
-                    }
+                    if (audioContext.currentTime - recordStartTime >= recordLimitSecs) stopRecording();
                 };
             } else {
-                let mimeType = format === 'flac' ? 'audio/flac' : 'audio/webm;codecs=opus';
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = 'audio/webm;codecs=opus';
-                    recordFormatInput.value = 'opus';
-                }
+                let mimeType = recordFormatInput.value === 'flac' ? 'audio/flac' : 'audio/webm;codecs=opus';
+                if (!MediaRecorder.isTypeSupported(mimeType)) { mimeType = 'audio/webm;codecs=opus'; recordFormatInput.value = 'opus'; }
                 recordedChunks =[];
                 mediaRecorder = new MediaRecorder(dest.stream, { mimeType: mimeType });
-                
                 mediaRecorder.ondataavailable = e => { 
                     if (e.data.size > 0) recordedChunks.push(e.data); 
-                    // Enforce background stop limit
-                    if (isRecording && (audioContext.currentTime - recordStartTime >= recordLimitSecs)) {
-                        stopRecording();
-                    }
+                    if (isRecording && (audioContext.currentTime - recordStartTime >= recordLimitSecs)) stopRecording();
                 };
-                
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: mimeType });
-                    triggerDownload(blob, `MicScaler_Output.${mimeType.includes('flac') ? 'flac' : 'webm'}`);
-                };
+                mediaRecorder.onstop = () => { triggerDownload(new Blob(recordedChunks, { type: mimeType }), `MicScaler_Output.${mimeType.includes('flac') ? 'flac' : 'webm'}`); };
                 mediaRecorder.start(100); 
             }
         }
 
         function stopRecording() {
-            isRecording = false;
-            recordBtn.innerText = '⏺ Start Recording';
-            recordBtn.classList.remove('record-active');
+            isRecording = false; recordBtn.innerText = '⏺ Start Recording'; recordBtn.classList.remove('record-active');
             recordStatus.innerText = 'Compiling audio file...';
-
             if (recordFormatInput.value === 'wav' && scriptProcessor) {
-                scriptProcessor.disconnect(); // Correctly detach
-                // UI Repaint Delay: Gives the browser time to paint the "Compiling..." text before freezing the CPU
-                setTimeout(compileWAVFile, 50);
-            } else if (mediaRecorder && mediaRecorder.state !== "inactive") {
-                mediaRecorder.stop();
-            }
+                scriptProcessor.disconnect(); setTimeout(compileWAVFile, 50);
+            } else if (mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.stop(); }
         }
 
         function compileWAVFile() {
@@ -496,66 +525,82 @@
             const flattened = new Float32Array(totalLength);
             let offset = 0;
             for (let arr of wavAudioBuffer) { flattened.set(arr, offset); offset += arr.length; }
-
-            const sampleRate = audioContext.sampleRate;
-            const buffer = new ArrayBuffer(44 + flattened.length * 2);
-            const view = new DataView(buffer);
-            const writeString = (v, off, str) => { for (let i=0; i<str.length; i++) v.setUint8(off + i, str.charCodeAt(i)); };
-            
-            writeString(view, 0, 'RIFF'); view.setUint32(4, 36 + flattened.length * 2, true);
-            writeString(view, 8, 'WAVE'); writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
-            view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
-            view.setUint16(32, 2, true); view.setUint16(34, 16, true);
-            writeString(view, 36, 'data'); view.setUint32(40, flattened.length * 2, true);
-
-            let pcmOffset = 44;
-            for (let i = 0; i < flattened.length; i++, pcmOffset += 2) {
-                let s = Math.max(-1, Math.min(1, flattened[i]));
-                view.setInt16(pcmOffset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            const sr = audioContext.sampleRate; const buffer = new ArrayBuffer(44 + flattened.length * 2); const view = new DataView(buffer);
+            const writeStr = (v, off, str) => { for (let i=0; i<str.length; i++) v.setUint8(off + i, str.charCodeAt(i)); };
+            writeStr(view, 0, 'RIFF'); view.setUint32(4, 36 + flattened.length * 2, true); writeStr(view, 8, 'WAVE'); writeStr(view, 12, 'fmt ');
+            view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, sr, true); view.setUint32(28, sr * 2, true);
+            view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeStr(view, 36, 'data'); view.setUint32(40, flattened.length * 2, true);
+            for (let i = 0, pcmOffset = 44; i < flattened.length; i++, pcmOffset += 2) {
+                let s = Math.max(-1, Math.min(1, flattened[i])); view.setInt16(pcmOffset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
             }
             triggerDownload(new Blob([view], { type: 'audio/wav' }), 'MicScaler_Output.wav');
         }
 
         function triggerDownload(blob, filename) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none'; a.href = url; a.download = filename;
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.style.display = 'none'; a.href = url; a.download = filename;
             document.body.appendChild(a); a.click();
             setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); recordStatus.innerText = "Saved successfully!"; }, 100);
         }
 
+        // --- MASTER VISUALIZERS (OSC + FFT) ---
         function processVisualizer() {
             if (!isRunning) return;
             animationId = requestAnimationFrame(processVisualizer);
-            analyser.getFloatTimeDomainData(dataArray);
             
+            // 1. HRTF 3D Rotation update
             if (document.getElementById('ac-rotate').checked && panner) {
                 const t = audioContext.currentTime;
                 panner.positionX.setValueAtTime(Math.sin(t * 2.0) * 2, t);
                 panner.positionZ.setValueAtTime(Math.cos(t * 2.0) * 2, t);
             }
 
-            const dataLength = dataArray.length;
-            masterCtx.fillStyle = '#000000';
-            masterCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
-            masterCtx.lineWidth = 2;
-            masterCtx.strokeStyle = '#bb86fc'; 
-            masterCtx.beginPath();
-
-            const sliceWidth = masterCanvas.width / dataLength;
-            const heightHalf = masterCanvas.height / 2;
+            // 2. OSCILLOSCOPE (Time Domain Output)
+            outAnalyser.getFloatTimeDomainData(outDataArray);
+            const dataLength = outDataArray.length;
+            masterCtx.fillStyle = '#000000'; masterCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
+            masterCtx.lineWidth = 2; masterCtx.strokeStyle = '#bb86fc'; masterCtx.beginPath();
+            const sliceWidth = masterCanvas.width / dataLength; const heightHalf = masterCanvas.height / 2;
             let x = 0;
-
             for (let i = 0; i < dataLength; i++) {
-                const y = (dataArray[i] * heightHalf) + heightHalf;
-                i === 0 ? masterCtx.moveTo(x, y) : masterCtx.lineTo(x, y);
-                x += sliceWidth;
+                const y = (outDataArray[i] * heightHalf) + heightHalf;
+                i === 0 ? masterCtx.moveTo(x, y) : masterCtx.lineTo(x, y); x += sliceWidth;
             }
             masterCtx.stroke();
+
+            // 3. FFT FREQUENCY DISTRIBUTION
+            rawAnalyser.getByteFrequencyData(rawFreqData);
+            filteredAnalyser.getByteFrequencyData(filteredFreqData);
+
+            fftCtx.fillStyle = '#000000';
+            fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
+
+            const fftLen = rawAnalyser.frequencyBinCount;
+            const fWidth = fftCanvas.width / fftLen;
+
+            // Draw Raw Mic (Faint Gray Fill)
+            fftCtx.beginPath();
+            fftCtx.moveTo(0, fftCanvas.height);
+            for(let i = 0; i < fftLen; i++) {
+                const v = rawFreqData[i] / 255.0;
+                fftCtx.lineTo(i * fWidth, fftCanvas.height - (v * fftCanvas.height));
+            }
+            fftCtx.lineTo(fftCanvas.width, fftCanvas.height);
+            fftCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            fftCtx.fill();
+
+            // Draw Filtered Mic (Bright Green Line)
+            fftCtx.beginPath();
+            for(let i = 0; i < fftLen; i++) {
+                const v = filteredFreqData[i] / 255.0;
+                const y = fftCanvas.height - (v * fftCanvas.height);
+                i === 0 ? fftCtx.moveTo(i * fWidth, y) : fftCtx.lineTo(i * fWidth, y);
+            }
+            fftCtx.strokeStyle = 'var(--bp)';
+            fftCtx.lineWidth = 2;
+            fftCtx.stroke();
         }
 
-        micBtn.addEventListener('click', toggleMic);
+        document.getElementById('mic-btn').addEventListener('click', toggleMic);
     </script>
 </body>
 </html>
