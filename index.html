@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - Multi-Instance Data Engine (v1.16.0)</title>
+    <title>MicScaler - Multi-Instance Data Engine (v1.17.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -68,15 +68,15 @@
         <button id="mic-btn">Start Microphone</button>
         <div class="control-group divider">
             <label style="color: var(--bp); font-weight:bold;">Pre-Scale Bandpass:</label>
-            <input type="checkbox" id="bp-enable"> <span style="font-size:0.9em;">Enable</span>
+            <input type="checkbox" id="bp-enable" checked> <span style="font-size:0.9em;">Enable</span>
         </div>
         <div class="control-group divider">
             <label>Low Cut (Hz):</label>
-            <input type="number" id="bp-low" class="ui-num" min="20" max="20000" value="80" style="width: 70px;">
+            <input type="number" id="bp-low" class="ui-num" min="20" max="20000" value="300" style="width: 70px;">
         </div>
         <div class="control-group divider">
             <label>High Cut (Hz):</label>
-            <input type="number" id="bp-high" class="ui-num" min="20" max="20000" value="3000" style="width: 70px;">
+            <input type="number" id="bp-high" class="ui-num" min="20" max="20000" value="22000" style="width: 70px;">
         </div>
     </div>
 
@@ -104,15 +104,15 @@
         <div class="control-group">
             <label title="Chops the data feeding into the engines" style="color: var(--warn); font-weight:bold;">Math Gate (ms): </label>
             <input type="number" id="gate-ms" class="ui-num" min="0.1" max="1000" step="0.1" value="100" style="width: 65px;">
-            <input type="checkbox" id="gate-enable-toggle"> <span style="font-size:0.9em;">Enable</span>
+            <input type="checkbox" id="gate-enable-toggle" checked> <span style="font-size:0.9em;">Enable</span>
         </div>
         <div class="control-group divider" style="border: 1px solid var(--primary); padding: 5px 10px; border-radius: 4px;">
             <label title="Physically chops sound playing from speakers" style="color: var(--warn); font-weight:bold;">Speaker Gate (ms): </label>
             <input type="number" id="out-gate-ms" class="ui-num" min="0.1" max="1000" step="0.1" value="100" style="width: 65px;">
-            <input type="checkbox" id="out-gate-enable-toggle"> <span style="font-size:0.9em;">Enable</span>
+            <input type="checkbox" id="out-gate-enable-toggle" checked> <span style="font-size:0.9em;">Enable</span>
         </div>
         <div class="control-group divider"><input type="checkbox" id="echo-toggle"><label>Earpiece Mode</label></div>
-        <div class="control-group divider"><input type="checkbox" id="audio-output-toggle"><label style="font-weight:bold;">Speaker Out <span style="color:var(--danger); font-size: 0.8em;">(!Feedback)</span></label></div>
+        <div class="control-group divider"><input type="checkbox" id="audio-output-toggle" checked><label style="font-weight:bold;">Speaker Out <span style="color:var(--danger); font-size: 0.8em;">(!Feedback)</span></label></div>
     </div>
 
     <!-- ROW 5: RECORDING & EXPORT -->
@@ -130,13 +130,15 @@
             constructor() {
                 super();
                 this.globalSampleCounter = 0;
+                
+                // Matches new UI defaults
                 this.config = {
-                    inGateEnabled: false, inGateSamples: 4800,
+                    inGateEnabled: true, inGateSamples: 4800,
                     acEnabled: false, acBurst: true, acSamples: 100,
                     engines:[
-                        { active: false, tracks: 100, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 15, currentStep: 0.0001, lfoSamples: 0 },
-                        { active: false, tracks: 100, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 15, currentStep: 0.0001, lfoSamples: 0 },
-                        { active: false, tracks: 100, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 15, currentStep: 0.0001, lfoSamples: 0 }
+                        { active: true, tracks: 1000, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 5, currentStep: 0.0001, lfoSamples: 0 },
+                        { active: true, tracks: 1000, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 30, currentStep: 0.0001, lfoSamples: 0 },
+                        { active: true, tracks: 1000, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 60, currentStep: 0.0001, lfoSamples: 0 }
                     ]
                 };
                 this.port.onmessage = (e) => {
@@ -228,17 +230,19 @@
         const fftCanvas = document.getElementById('fft-canvas');
         const fftCtx = fftCanvas.getContext('2d', { alpha: false });
         
+        // Match JS state to new HTML defaults
+        let inToggleEnabled = true; 
+
         // --- BANDPASS LISTENERS ---
         function updateBandpass() {
             if (!audioContext) return;
             const enabled = document.getElementById('bp-enable').checked;
-            const low = parseFloat(document.getElementById('bp-low').value) || 80;
-            const high = parseFloat(document.getElementById('bp-high').value) || 3000;
+            const low = parseFloat(document.getElementById('bp-low').value) || 300;
+            const high = parseFloat(document.getElementById('bp-high').value) || 22000;
             
             hpFilter.frequency.setTargetAtTime(low, audioContext.currentTime, 0.05);
             lpFilter.frequency.setTargetAtTime(high, audioContext.currentTime, 0.05);
             
-            // Crossfade between Raw Mic and Filtered Mic into the Worklet
             micBypassGain.gain.setTargetAtTime(enabled ? 0 : 1, audioContext.currentTime, 0.05);
             filteredGain.gain.setTargetAtTime(enabled ? 1 : 0, audioContext.currentTime, 0.05);
         }['bp-enable', 'bp-low', 'bp-high'].forEach(id => {
@@ -249,15 +253,18 @@
         // --- INSTANCE DASHBOARD GENERATOR ---
         const instancesContainer = document.getElementById('instances-container');
         for(let i=0; i<3; i++) {
+            // Apply new time defaults per engine
+            const defaultTime = i === 0 ? 5 : (i === 1 ? 30 : 60);
+            
             instancesContainer.innerHTML += `
-            <div class="instance-card" id="card-${i}">
+            <div class="instance-card active-card" id="card-${i}">
                 <div class="instance-header"><span>Engine ${i + 1}</span>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <input type="checkbox" id="eng-active-${i}" ${i===0 ? 'checked' : ''}> Enable
-                        <div id="led-${i}" class="led-indicator ${i===0 ? 'on' : ''}"></div>
+                        <input type="checkbox" id="eng-active-${i}" checked> Enable
+                        <div id="led-${i}" class="led-indicator"></div>
                     </div>
                 </div>
-                <div class="instance-row"><label>Tracks (1-1000):</label><input type="number" id="eng-tracks-${i}" class="ui-num" min="1" max="1000" value="100" style="width: 60px;"></div>
+                <div class="instance-row"><label>Tracks (1-1000):</label><input type="number" id="eng-tracks-${i}" class="ui-num" min="1" max="1000" value="1000" style="width: 60px;"></div>
                 <div class="instance-row"><label style="color:var(--danger);">Invert Pattern:</label>
                     <select id="eng-pat-${i}" class="ui-num" style="width: 70px;">
                         <option value="0">None</option><option value="2" selected>2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option>
@@ -267,7 +274,7 @@
                 <div class="instance-row" style="color: var(--info); font-weight:bold;">Auto-Step LFO</div>
                 <div class="instance-row"><label>Start (High):</label><input type="number" id="eng-start-${i}" class="ui-num" step="0.0001" value="1.0" style="width: 70px;"></div>
                 <div class="instance-row"><label>End (Low):</label><input type="number" id="eng-end-${i}" class="ui-num" step="0.0001" value="0.0001" style="width: 70px;"></div>
-                <div class="instance-row"><label>Time (Sec):</label><input type="number" id="eng-time-${i}" class="ui-num" min="1" max="600" value="15" style="width: 70px;"></div>
+                <div class="instance-row"><label>Time (Sec):</label><input type="number" id="eng-time-${i}" class="ui-num" min="1" max="600" value="${defaultTime}" style="width: 70px;"></div>
                 <div class="instance-row" style="margin-top: 5px;">
                     <button id="eng-lfo-btn-${i}" style="background:var(--info); width:80px;">Start</button>
                     <div style="display:flex; flex-direction:column; align-items:flex-end;">
@@ -282,7 +289,7 @@
             if(!liveMathNode) return;
             const config = {
                 active: document.getElementById(`eng-active-${idx}`).checked,
-                tracks: parseInt(document.getElementById(`eng-tracks-${idx}`).value) || 100,
+                tracks: parseInt(document.getElementById(`eng-tracks-${idx}`).value) || 1000,
                 patternN: parseInt(document.getElementById(`eng-pat-${idx}`).value) || 0,
                 lfoStart: parseFloat(document.getElementById(`eng-start-${idx}`).value) || 1.0,
                 lfoEnd: parseFloat(document.getElementById(`eng-end-${idx}`).value) || 0.0001,
@@ -312,10 +319,11 @@
 
         function updateGlobalWorklet() {
             if (!liveMathNode) return;
+            inToggleEnabled = document.getElementById('gate-enable-toggle').checked;
             const inGateSamples = (parseFloat(document.getElementById('gate-ms').value) || 100) / 1000 * audioContext.sampleRate;
             liveMathNode.port.postMessage({
                 type: 'config',
-                inGateEnabled: document.getElementById('gate-enable-toggle').checked,
+                inGateEnabled: inToggleEnabled,
                 inGateSamples: inGateSamples,
                 acEnabled: document.getElementById('ac-enable').checked,
                 acBurst: document.getElementById('ac-mode').value === 'burst',
@@ -547,14 +555,12 @@
             if (!isRunning) return;
             animationId = requestAnimationFrame(processVisualizer);
             
-            // 1. HRTF 3D Rotation update
             if (document.getElementById('ac-rotate').checked && panner) {
                 const t = audioContext.currentTime;
                 panner.positionX.setValueAtTime(Math.sin(t * 2.0) * 2, t);
                 panner.positionZ.setValueAtTime(Math.cos(t * 2.0) * 2, t);
             }
 
-            // 2. OSCILLOSCOPE (Time Domain Output)
             outAnalyser.getFloatTimeDomainData(outDataArray);
             const dataLength = outDataArray.length;
             masterCtx.fillStyle = '#000000'; masterCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
@@ -567,7 +573,6 @@
             }
             masterCtx.stroke();
 
-            // 3. FFT FREQUENCY DISTRIBUTION
             rawAnalyser.getByteFrequencyData(rawFreqData);
             filteredAnalyser.getByteFrequencyData(filteredFreqData);
 
@@ -577,7 +582,6 @@
             const fftLen = rawAnalyser.frequencyBinCount;
             const fWidth = fftCanvas.width / fftLen;
 
-            // Draw Raw Mic (Faint Gray Fill)
             fftCtx.beginPath();
             fftCtx.moveTo(0, fftCanvas.height);
             for(let i = 0; i < fftLen; i++) {
@@ -588,7 +592,6 @@
             fftCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
             fftCtx.fill();
 
-            // Draw Filtered Mic (Bright Green Line)
             fftCtx.beginPath();
             for(let i = 0; i < fftLen; i++) {
                 const v = filteredFreqData[i] / 255.0;
