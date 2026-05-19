@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - 20-Engine Data Array (v1.20.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.21.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
             --danger: #cf6679; --info: #03dac6; --warn: #ffb300; --record: #ff1744; --aura: #00e5ff;
-            --bp: #aeea00; --text: #e0e0e0; --border: #333; --led-off: #333; --led-on: #0cf50c;
+            --bp: #aeea00; --mic: #ff9800; --text: #e0e0e0; --border: #333; --led-off: #333; --led-on: #0cf50c;
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .header { text-align: center; margin-bottom: 10px; width: 100%; max-width: 800px; }
@@ -31,6 +31,12 @@
 
         .ui-num { padding: 4px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
         select.ui-num { cursor: pointer; }
+
+        /* METERING STYLES */
+        .meter-container { display: flex; flex-direction: column; gap: 4px; font-family: monospace; font-size: 0.9em; width: 140px;}
+        .meter-row { display: flex; align-items: center; justify-content: space-between; }
+        .meter-bar-bg { width: 100%; height: 4px; background: #222; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+        .meter-bar-fill { height: 100%; width: 0%; transition: width 0.05s linear; }
 
         /* INSTANCE DASHBOARD STYLES */
         .dash-header-row { width: 100%; max-width: 1600px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px; box-sizing: border-box; gap: 10px; }
@@ -64,10 +70,25 @@
         </div>
     </div>
 
-    <!-- ROW 1: PRE-PROCESSING (BANDPASS) -->
-    <div class="controls" style="border-color: var(--bp);">
+    <!-- ROW 1: MIC INPUT & METERING -->
+    <div class="controls" style="border-color: var(--mic);">
         <button id="mic-btn">Start Microphone</button>
         <div class="control-group divider">
+            <label style="color: var(--mic); font-weight:bold;">Mic Volume (%):</label>
+            <input type="number" id="mic-vol-pct" class="ui-num" min="0" max="100" value="100" style="width: 60px;">
+        </div>
+        <div class="control-group divider meter-container">
+            <div class="meter-row"><span style="color:#aaa;">Pre:</span> <span id="db-pre">-∞ dB</span></div>
+            <div class="meter-bar-bg"><div id="meter-bar-pre" class="meter-bar-fill" style="background:#aaa;"></div></div>
+            
+            <div class="meter-row" style="margin-top:4px;"><span style="color:var(--info);">Post:</span> <span id="db-post" style="color:var(--info);">-∞ dB</span></div>
+            <div class="meter-bar-bg"><div id="meter-bar-post" class="meter-bar-fill" style="background:var(--info);"></div></div>
+        </div>
+    </div>
+
+    <!-- ROW 2: PRE-PROCESSING (BANDPASS) -->
+    <div class="controls" style="border-color: var(--bp);">
+        <div class="control-group">
             <label style="color: var(--bp); font-weight:bold;">Pre-Scale Bandpass:</label>
             <input type="checkbox" id="bp-enable" checked> <span style="font-size:0.9em;">Enable</span>
         </div>
@@ -83,18 +104,23 @@
 
     <!-- ENGINES DASHBOARD HEADER -->
     <div class="dash-header-row">
-        <h2 style="margin: 0; color: var(--info); font-size: 1.2em;">Engine Dashboard (20,000 Tracks)</h2>
+        <h2 style="margin: 0; color: var(--info); font-size: 1.2em;">Engine Dashboard</h2>
         
-        <!-- NEW: BATCH SETTINGS CONTROLS -->
         <div class="dash-header-controls">
-            <div style="display: flex; align-items: center; gap: 5px;">
+            <!-- NEW: MASTER ENGINE CONTROLS -->
+            <div class="control-group">
+                <label style="font-weight:bold;">Active Engines:</label>
+                <input type="number" id="master-engines" class="ui-num" min="1" max="20" value="20" style="width: 50px;">
+            </div>
+            <div class="control-group divider">
+                <label style="font-weight:bold;">Tracks/Engine:</label>
+                <input type="number" id="master-tracks" class="ui-num" min="1" max="1000" value="1000" style="width: 60px;">
+            </div>
+
+            <div class="control-group divider">
                 <label style="color: var(--danger); font-weight: bold;">Master Pattern:</label>
                 <select id="master-pattern-select" class="ui-num" style="width: 70px;">
-                    <option value="0">None</option>
-                    <option value="2" selected>2nd</option>
-                    <option value="3">3rd</option>
-                    <option value="4">4th</option>
-                    <option value="5">5th</option>
+                    <option value="0">None</option><option value="2" selected>2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option>
                 </select>
                 <button id="apply-master-pattern-btn" style="background-color: var(--danger); padding: 4px 10px; font-size: 0.85em; color: white;">Set All</button>
             </div>
@@ -104,26 +130,23 @@
         </div>
     </div>
 
-    <!-- ROW 2: ENGINES DASHBOARD (20 ENGINES) -->
+    <!-- ROW 3: ENGINES DASHBOARD (20 ENGINES) -->
     <div id="instances-container"></div>
 
-    <!-- ROW 3: AURACONV ENGINE -->
+    <!-- ROW 4: AURACONV ENGINE -->
     <div class="controls" style="border-color: var(--aura); margin-top: 10px;">
         <div class="control-group">
             <label style="color: var(--aura); font-weight:bold;">AuraConv Comb Filter: </label>
             <input type="number" id="ac-samples" class="ui-num" min="1" max="10000" value="100" style="width: 60px;">
             <span style="font-size:0.8em; color:#aaa;">Samples</span>
-            <select id="ac-mode" class="ui-num" style="margin-left: 5px;">
-                <option value="burst">Burst (Allow)</option>
-                <option value="gap">Gap (Block)</option>
-            </select>
+            <select id="ac-mode" class="ui-num" style="margin-left: 5px;"><option value="burst">Burst (Allow)</option><option value="gap">Gap (Block)</option></select>
             <input type="checkbox" id="ac-enable" style="margin-left: 5px;"> <span style="font-size:0.9em;">Enable</span>
         </div>
         <div class="control-group divider"><input type="checkbox" id="ac-reverb"> <span style="font-size:0.9em; font-weight:bold;">Convolution Reverb</span></div>
         <div class="control-group divider"><input type="checkbox" id="ac-rotate"> <span style="font-size:0.9em; font-weight:bold;">HRTF 3D Rotation</span></div>
     </div>
 
-    <!-- ROW 4: HARDWARE GATING & ROUTING -->
+    <!-- ROW 5: HARDWARE GATING & ROUTING -->
     <div class="controls" style="border-color: var(--warn);">
         <div class="control-group">
             <label title="Chops the data feeding into the engines" style="color: var(--warn); font-weight:bold;">Math Gate (ms): </label>
@@ -139,7 +162,7 @@
         <div class="control-group divider"><input type="checkbox" id="audio-output-toggle" checked><label style="font-weight:bold;">Speaker Out <span style="color:var(--danger); font-size: 0.8em;">(!Feedback)</span></label></div>
     </div>
 
-    <!-- ROW 5: RECORDING & EXPORT -->
+    <!-- ROW 6: RECORDING & EXPORT -->
     <div class="controls" style="border-color: var(--record);">
         <button id="record-btn" style="background-color: var(--surface); border: 2px solid var(--record); color: white;">⏺ Start Recording</button>
         <div class="control-group divider"><label style="color: var(--text);">Auto-Stop (Mins): </label><input type="number" id="record-limit-mins" class="ui-num" min="0.1" max="120" step="0.1" value="5" style="width: 60px;"></div>
@@ -245,6 +268,11 @@
         let liveMathNode, fxHubIn, fxHubOut, convolver, panner, outputGain, chopperOsc, chopperGain; 
         
         let outAnalyser, outDataArray;
+        
+        // NEW: Mic Input Metering Nodes
+        let micInputGain, micPreAnalyser, micPreDataArray, rawTimeDataArray;
+
+        // Pre-Scale Bandpass Nodes
         let hpFilter, lpFilter, rawAnalyser, filteredAnalyser, rawFreqData, filteredFreqData;
         let micBypassGain, filteredGain;
 
@@ -254,14 +282,20 @@
         const micBtn = document.getElementById('mic-btn');
         const audioOutputToggle = document.getElementById('audio-output-toggle');
         const echoToggle = document.getElementById('echo-toggle');
-        
         const masterCanvas = document.getElementById('master-canvas');
         const masterCtx = masterCanvas.getContext('2d', { alpha: false });
-        
         const fftCanvas = document.getElementById('fft-canvas');
         const fftCtx = fftCanvas.getContext('2d', { alpha: false });
         
         let inToggleEnabled = true; 
+
+        // --- MIC VOLUME LISTENER ---
+        document.getElementById('mic-vol-pct').addEventListener('input', (e) => {
+            if(micInputGain) {
+                const vol = parseFloat(e.target.value) || 0;
+                micInputGain.gain.setTargetAtTime(vol / 100.0, audioContext.currentTime, 0.05);
+            }
+        });
 
         // --- BANDPASS LISTENERS ---
         function updateBandpass() {
@@ -316,6 +350,34 @@
             </div>`;
         }
 
+        // --- MASTER ENGINE CONTROLS ---
+        document.getElementById('master-engines').addEventListener('change', (e) => {
+            let val = parseInt(e.target.value) || 20;
+            val = Math.max(1, Math.min(20, val));
+            e.target.value = val;
+            for(let i=0; i<ENGINE_COUNT; i++) {
+                const card = document.getElementById(`card-${i}`);
+                const chk = document.getElementById(`eng-active-${i}`);
+                if(i < val) {
+                    card.style.display = 'flex';
+                    chk.checked = true;
+                } else {
+                    card.style.display = 'none';
+                    chk.checked = false;
+                }
+                sendEngineConfig(i);
+            }
+        });
+
+        document.getElementById('master-tracks').addEventListener('input', (e) => {
+            let val = parseInt(e.target.value) || 1000;
+            val = Math.max(1, Math.min(1000, val));
+            for(let i=0; i<ENGINE_COUNT; i++) {
+                const el = document.getElementById(`eng-tracks-${i}`);
+                if (el) { el.value = val; sendEngineConfig(i); }
+            }
+        });
+
         // --- BATCH SETTINGS / MASTER LFO LOGIC ---
         let engineLfoStates = Array(ENGINE_COUNT).fill(false);
         const masterLfoBtn = document.getElementById('master-lfo-btn');
@@ -327,7 +389,7 @@
                 const patSelect = document.getElementById(`eng-pat-${i}`);
                 if (patSelect) {
                     patSelect.value = masterPat;
-                    sendEngineConfig(i); // Syncs UI to AudioWorklet
+                    sendEngineConfig(i);
                 }
             }
         });
@@ -342,7 +404,6 @@
         masterLfoBtn.addEventListener('click', () => {
             if(!liveMathNode) { alert("Start Microphone First!"); return; }
             masterLfoRunning = !masterLfoRunning;
-            
             masterLfoBtn.innerText = masterLfoRunning ? '⏹ Stop All LFOs' : '▶ Start All LFOs';
             masterLfoBtn.style.backgroundColor = masterLfoRunning ? 'var(--danger)' : 'var(--info)';
 
@@ -487,6 +548,17 @@
                 
                 microphone = audioContext.createMediaStreamSource(stream);
                 
+                // --- SETUP MIC METERING & VOLUME REDUCTION ---
+                micInputGain = audioContext.createGain();
+                micInputGain.gain.value = (parseFloat(document.getElementById('mic-vol-pct').value) || 100) / 100.0;
+                
+                micPreAnalyser = audioContext.createAnalyser();
+                micPreAnalyser.fftSize = 1024;
+                micPreDataArray = new Float32Array(micPreAnalyser.frequencyBinCount);
+                
+                microphone.connect(micPreAnalyser); // Pure Pre-Vol
+                microphone.connect(micInputGain);   // Volume reduction node
+
                 // --- SETUP BANDPASS & FFT NODES ---
                 hpFilter = audioContext.createBiquadFilter(); hpFilter.type = 'highpass';
                 lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
@@ -496,14 +568,17 @@
                 
                 rawFreqData = new Uint8Array(rawAnalyser.frequencyBinCount);
                 filteredFreqData = new Uint8Array(filteredAnalyser.frequencyBinCount);
+                rawTimeDataArray = new Float32Array(rawAnalyser.frequencyBinCount); // For Post dB
 
-                micBypassGain = audioContext.createGain(); micBypassGain.gain.value = 1;
-                filteredGain = audioContext.createGain(); filteredGain.gain.value = 0;
+                micBypassGain = audioContext.createGain(); micBypassGain.gain.value = 0; // Default off since BP is true
+                filteredGain = audioContext.createGain(); filteredGain.gain.value = 1;
 
-                microphone.connect(rawAnalyser);
-                microphone.connect(hpFilter); hpFilter.connect(lpFilter); lpFilter.connect(filteredAnalyser);
+                // Wire FFT graph feeds (Post-MicVolume)
+                micInputGain.connect(rawAnalyser);
+                micInputGain.connect(hpFilter); hpFilter.connect(lpFilter); lpFilter.connect(filteredAnalyser);
                 
-                microphone.connect(micBypassGain);
+                // Wire to Math Engine
+                micInputGain.connect(micBypassGain);
                 lpFilter.connect(filteredGain);
 
                 liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor');
@@ -628,16 +703,39 @@
             setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); recordStatus.innerText = "Saved successfully!"; }, 100);
         }
 
+        // --- MASTER VISUALIZERS (Meters, OSC + FFT) ---
         function processVisualizer() {
             if (!isRunning) return;
             animationId = requestAnimationFrame(processVisualizer);
             
+            // 1. HRTF 3D Rotation
             if (document.getElementById('ac-rotate').checked && panner) {
                 const t = audioContext.currentTime;
                 panner.positionX.setValueAtTime(Math.sin(t * 2.0) * 2, t);
                 panner.positionZ.setValueAtTime(Math.cos(t * 2.0) * 2, t);
             }
 
+            // 2. MIC DB METERS (Pre vs Post Vol Reduction)
+            micPreAnalyser.getFloatTimeDomainData(micPreDataArray);
+            rawAnalyser.getFloatTimeDomainData(rawTimeDataArray); // Post-gain
+
+            let preSum = 0, postSum = 0;
+            for(let i=0; i<micPreDataArray.length; i++) { preSum += micPreDataArray[i] * micPreDataArray[i]; postSum += rawTimeDataArray[i] * rawTimeDataArray[i]; }
+            
+            const preRms = Math.sqrt(preSum / micPreDataArray.length);
+            const postRms = Math.sqrt(postSum / rawTimeDataArray.length);
+            
+            const preDb = preRms > 0 ? 20 * Math.log10(preRms) : -100;
+            const postDb = postRms > 0 ? 20 * Math.log10(postRms) : -100;
+
+            document.getElementById('db-pre').innerText = preDb <= -100 ? '-∞ dB' : preDb.toFixed(1) + ' dB';
+            document.getElementById('db-post').innerText = postDb <= -100 ? '-∞ dB' : postDb.toFixed(1) + ' dB';
+
+            // Map dB (-60 to 0) to percentage for visual bar
+            document.getElementById('meter-bar-pre').style.width = Math.max(0, Math.min(100, (preDb + 60) * 1.66)) + '%';
+            document.getElementById('meter-bar-post').style.width = Math.max(0, Math.min(100, (postDb + 60) * 1.66)) + '%';
+
+            // 3. OSCILLOSCOPE (Time Domain Output)
             outAnalyser.getFloatTimeDomainData(outDataArray);
             const dataLength = outDataArray.length;
             masterCtx.fillStyle = '#000000'; masterCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
@@ -650,24 +748,21 @@
             }
             masterCtx.stroke();
 
+            // 4. FFT FREQUENCY DISTRIBUTION
             rawAnalyser.getByteFrequencyData(rawFreqData);
             filteredAnalyser.getByteFrequencyData(filteredFreqData);
-
-            fftCtx.fillStyle = '#000000';
-            fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
+            fftCtx.fillStyle = '#000000'; fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
 
             const fftLen = rawAnalyser.frequencyBinCount;
             const fWidth = fftCanvas.width / fftLen;
 
-            fftCtx.beginPath();
-            fftCtx.moveTo(0, fftCanvas.height);
+            fftCtx.beginPath(); fftCtx.moveTo(0, fftCanvas.height);
             for(let i = 0; i < fftLen; i++) {
                 const v = rawFreqData[i] / 255.0;
                 fftCtx.lineTo(i * fWidth, fftCanvas.height - (v * fftCanvas.height));
             }
             fftCtx.lineTo(fftCanvas.width, fftCanvas.height);
-            fftCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            fftCtx.fill();
+            fftCtx.fillStyle = 'rgba(255, 255, 255, 0.2)'; fftCtx.fill();
 
             fftCtx.beginPath();
             for(let i = 0; i < fftLen; i++) {
@@ -675,12 +770,13 @@
                 const y = fftCanvas.height - (v * fftCanvas.height);
                 i === 0 ? fftCtx.moveTo(i * fWidth, y) : fftCtx.lineTo(i * fWidth, y);
             }
-            fftCtx.strokeStyle = 'var(--bp)';
-            fftCtx.lineWidth = 2;
-            fftCtx.stroke();
+            fftCtx.strokeStyle = 'var(--bp)'; fftCtx.lineWidth = 2; fftCtx.stroke();
         }
 
         document.getElementById('mic-btn').addEventListener('click', toggleMic);
+
+        // Run Engine Visibility logic once on load to ensure UI sync
+        document.getElementById('master-engines').dispatchEvent(new Event('change'));
     </script>
 </body>
 </html>
