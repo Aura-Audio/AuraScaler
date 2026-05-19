@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - Multi-Instance Data Engine (v1.17.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.18.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -13,7 +13,6 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .header { text-align: center; margin-bottom: 10px; width: 100%; max-width: 800px; }
         
-        /* Analysis Dashboard */
         .canvas-row { display: flex; flex-wrap: wrap; gap: 15px; width: 100%; max-width: 1400px; justify-content: center; margin-bottom: 15px; }
         .canvas-container { flex: 1 1 300px; display: flex; flex-direction: column; width: 100%; max-width: 600px; }
         .canvas-label { font-size: 0.85em; color: var(--info); margin-bottom: 5px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
@@ -34,20 +33,20 @@
         select.ui-num { cursor: pointer; }
 
         /* INSTANCE DASHBOARD STYLES */
-        #instances-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; width: 100%; max-width: 1400px; margin-bottom: 10px; }
-        .instance-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 12px; transition: border-color 0.3s; }
+        #instances-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; width: 100%; max-width: 1600px; margin-bottom: 10px; }
+        .instance-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.3s; }
         .instance-card.active-card { border-color: var(--primary); }
-        .instance-header { display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-        .led-indicator { width: 14px; height: 14px; border-radius: 50%; background-color: var(--led-off); box-shadow: 0 0 5px #000; transition: background-color 0.1s; }
+        .instance-header { display: flex; justify-content: space-between; align-items: center; font-size: 1.1em; font-weight: bold; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+        .led-indicator { width: 12px; height: 12px; border-radius: 50%; background-color: var(--led-off); box-shadow: 0 0 5px #000; transition: background-color 0.1s; }
         .led-indicator.on { background-color: var(--led-on); box-shadow: 0 0 10px var(--led-on); }
-        .instance-row { display: flex; justify-content: space-between; align-items: center; }
-        .readout { background: #000; color: var(--info); font-family: monospace; padding: 5px 10px; border-radius: 4px; font-size: 1.1em; width: 80px; text-align: right; border: 1px solid #444; }
+        .instance-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
+        .readout { background: #000; color: var(--info); font-family: monospace; padding: 4px 8px; border-radius: 4px; font-size: 1em; width: 70px; text-align: right; border: 1px solid #444; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <h1>MicScaler <span style="font-size: 0.5em; color: var(--info);">(Multi-Instance)</span></h1>
+        <h1>MicScaler <span style="font-size: 0.5em; color: var(--info);">(20-Engine Array)</span></h1>
         <p>Mathematical Multiplicative Scaling Engine</p>
     </div>
 
@@ -80,7 +79,7 @@
         </div>
     </div>
 
-    <!-- ROW 2: ENGINES DASHBOARD -->
+    <!-- ROW 2: ENGINES DASHBOARD (20 ENGINES) -->
     <div id="instances-container"></div>
 
     <!-- ROW 3: AURACONV ENGINE -->
@@ -124,6 +123,8 @@
     </div>
 
     <script>
+        const ENGINE_COUNT = 20; // 20 Engines * 1000 Tracks = 20,000 Tracks
+
         // --- 1. AUDIOWORKLET INJECTION ---
         const workletCode = `
         class MicScalerProcessor extends AudioWorkletProcessor {
@@ -131,16 +132,26 @@
                 super();
                 this.globalSampleCounter = 0;
                 
-                // Matches new UI defaults
+                // Dynamically build 20 engine configurations
+                const engineArray = Array(20).fill().map((_, i) => ({
+                    active: true, // All enabled by default
+                    tracks: 1000, 
+                    patternN: 2, 
+                    lfoActive: false, 
+                    lfoStart: 1.0, 
+                    lfoEnd: 0.0001, 
+                    // Stagger default times: 5, 30, 60, then 10, 15, 20...
+                    lfoTime: i === 0 ? 5 : i === 1 ? 30 : i === 2 ? 60 : 10 + (i * 5), 
+                    currentStep: 0.0001, 
+                    lfoSamples: 0
+                }));
+
                 this.config = {
                     inGateEnabled: true, inGateSamples: 4800,
                     acEnabled: false, acBurst: true, acSamples: 100,
-                    engines:[
-                        { active: true, tracks: 1000, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 5, currentStep: 0.0001, lfoSamples: 0 },
-                        { active: true, tracks: 1000, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 30, currentStep: 0.0001, lfoSamples: 0 },
-                        { active: true, tracks: 1000, patternN: 2, lfoActive: false, lfoStart: 1.0, lfoEnd: 0.0001, lfoTime: 60, currentStep: 0.0001, lfoSamples: 0 }
-                    ]
+                    engines: engineArray
                 };
+
                 this.port.onmessage = (e) => {
                     if (e.data.type === 'config') this.config = { ...this.config, ...e.data };
                     if (e.data.type === 'updateEngine') {
@@ -157,7 +168,7 @@
                 const channelOut = output[0];
                 const numFrames = channelIn.length;
 
-                for (let e = 0; e < 3; e++) {
+                for (let e = 0; e < 20; e++) {
                     let eng = this.config.engines[e];
                     if (eng.active && eng.lfoActive) {
                         const totalSamples = eng.lfoTime * sampleRate;
@@ -180,7 +191,7 @@
                     const val = allowed ? channelIn[i] : 0;
                     channelOut[i] = val; 
 
-                    for (let e = 0; e < 3; e++) {
+                    for (let e = 0; e < 20; e++) {
                         let eng = this.config.engines[e];
                         if (!eng.active) continue;
                         for (let t = 0; t < eng.tracks; t++) {
@@ -230,7 +241,6 @@
         const fftCanvas = document.getElementById('fft-canvas');
         const fftCtx = fftCanvas.getContext('2d', { alpha: false });
         
-        // Match JS state to new HTML defaults
         let inToggleEnabled = true; 
 
         // --- BANDPASS LISTENERS ---
@@ -250,11 +260,10 @@
             document.getElementById(id).addEventListener('input', updateBandpass);
         });
 
-        // --- INSTANCE DASHBOARD GENERATOR ---
+        // --- INSTANCE DASHBOARD GENERATOR (20 ENGINES) ---
         const instancesContainer = document.getElementById('instances-container');
-        for(let i=0; i<3; i++) {
-            // Apply new time defaults per engine
-            const defaultTime = i === 0 ? 5 : (i === 1 ? 30 : 60);
+        for(let i=0; i<ENGINE_COUNT; i++) {
+            const defaultTime = i === 0 ? 5 : (i === 1 ? 30 : (i === 2 ? 60 : 10 + (i * 5)));
             
             instancesContainer.innerHTML += `
             <div class="instance-card active-card" id="card-${i}">
@@ -264,21 +273,23 @@
                         <div id="led-${i}" class="led-indicator"></div>
                     </div>
                 </div>
-                <div class="instance-row"><label>Tracks (1-1000):</label><input type="number" id="eng-tracks-${i}" class="ui-num" min="1" max="1000" value="1000" style="width: 60px;"></div>
-                <div class="instance-row"><label style="color:var(--danger);">Invert Pattern:</label>
-                    <select id="eng-pat-${i}" class="ui-num" style="width: 70px;">
+                <div class="instance-row"><label>Tracks:</label><input type="number" id="eng-tracks-${i}" class="ui-num" min="1" max="1000" value="1000" style="width: 50px;"></div>
+                <div class="instance-row"><label style="color:var(--danger);">Pattern:</label>
+                    <select id="eng-pat-${i}" class="ui-num" style="width: 60px;">
                         <option value="0">None</option><option value="2" selected>2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option>
                     </select>
                 </div>
-                <hr style="border: 0; border-top: 1px solid var(--border); width: 100%;">
-                <div class="instance-row" style="color: var(--info); font-weight:bold;">Auto-Step LFO</div>
-                <div class="instance-row"><label>Start (High):</label><input type="number" id="eng-start-${i}" class="ui-num" step="0.0001" value="1.0" style="width: 70px;"></div>
-                <div class="instance-row"><label>End (Low):</label><input type="number" id="eng-end-${i}" class="ui-num" step="0.0001" value="0.0001" style="width: 70px;"></div>
-                <div class="instance-row"><label>Time (Sec):</label><input type="number" id="eng-time-${i}" class="ui-num" min="1" max="600" value="${defaultTime}" style="width: 70px;"></div>
+                <div class="instance-row" style="color: var(--info); font-weight:bold; margin-top:5px;">Auto-Step LFO</div>
+                <div class="instance-row"><label>Start/End:</label>
+                    <div>
+                        <input type="number" id="eng-start-${i}" class="ui-num" step="0.0001" value="1.0" style="width: 55px;">
+                        <input type="number" id="eng-end-${i}" class="ui-num" step="0.0001" value="0.0001" style="width: 65px;">
+                    </div>
+                </div>
+                <div class="instance-row"><label>Time (s):</label><input type="number" id="eng-time-${i}" class="ui-num" min="1" max="600" value="${defaultTime}" style="width: 50px;"></div>
                 <div class="instance-row" style="margin-top: 5px;">
-                    <button id="eng-lfo-btn-${i}" style="background:var(--info); width:80px;">Start</button>
+                    <button id="eng-lfo-btn-${i}" style="background:var(--info); width:60px; padding: 4px;">Start</button>
                     <div style="display:flex; flex-direction:column; align-items:flex-end;">
-                        <span style="font-size:0.7em; color:#aaa;">Current Step (+%)</span>
                         <div id="eng-readout-${i}" class="readout">0.0001</div>
                     </div>
                 </div>
@@ -303,7 +314,7 @@
             else { card.classList.remove('active-card'); led.classList.remove('on'); }
         }
 
-        for(let i=0; i<3; i++) {['eng-active-', 'eng-tracks-', 'eng-pat-', 'eng-start-', 'eng-end-', 'eng-time-'].forEach(prefix => {
+        for(let i=0; i<ENGINE_COUNT; i++) {['eng-active-', 'eng-tracks-', 'eng-pat-', 'eng-start-', 'eng-end-', 'eng-time-'].forEach(prefix => {
                 document.getElementById(prefix + i).addEventListener('input', () => sendEngineConfig(i));
                 document.getElementById(prefix + i).addEventListener('change', () => sendEngineConfig(i));
             });
@@ -393,7 +404,7 @@
                 micBtn.innerText = 'Start Microphone';
                 micBtn.classList.remove('active');
                 isRunning = false;
-                for(let i=0; i<3; i++) document.getElementById(`led-${i}`).classList.remove('on'); 
+                for(let i=0; i<ENGINE_COUNT; i++) document.getElementById(`led-${i}`).classList.remove('on'); 
                 return;
             }
 
@@ -429,7 +440,7 @@
                 liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor');
                 liveMathNode.port.onmessage = (e) => {
                     if (e.data.type === 'status') {
-                        for(let i=0; i<3; i++) {
+                        for(let i=0; i<ENGINE_COUNT; i++) {
                             if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`eng-readout-${i}`).innerText = e.data.steps[i].toFixed(4);
                         }
                     }
@@ -437,7 +448,7 @@
 
                 updateBandpass();
                 updateGlobalWorklet();
-                for(let i=0; i<3; i++) sendEngineConfig(i); 
+                for(let i=0; i<ENGINE_COUNT; i++) sendEngineConfig(i); 
 
                 outAnalyser = audioContext.createAnalyser(); outAnalyser.fftSize = 1024;
                 outDataArray = new Float32Array(outAnalyser.frequencyBinCount);
@@ -467,7 +478,7 @@
                 micBtn.classList.add('active');
                 isRunning = true;
                 
-                for(let i=0; i<3; i++) { if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`led-${i}`).classList.add('on'); }
+                for(let i=0; i<ENGINE_COUNT; i++) { if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`led-${i}`).classList.add('on'); }
 
                 // Sync canvas resolutions
                 masterCanvas.width = masterCanvas.clientWidth; masterCanvas.height = masterCanvas.clientHeight;
