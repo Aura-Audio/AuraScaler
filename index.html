@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - 20-Engine Data Array (v1.19.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.20.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -33,7 +33,8 @@
         select.ui-num { cursor: pointer; }
 
         /* INSTANCE DASHBOARD STYLES */
-        .dash-header-row { width: 100%; max-width: 1600px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px; box-sizing: border-box; }
+        .dash-header-row { width: 100%; max-width: 1600px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px; box-sizing: border-box; gap: 10px; }
+        .dash-header-controls { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background: var(--surface); padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border); }
         #instances-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; width: 100%; max-width: 1600px; margin-bottom: 10px; }
         .instance-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.3s; }
         .instance-card.active-card { border-color: var(--primary); }
@@ -83,7 +84,24 @@
     <!-- ENGINES DASHBOARD HEADER -->
     <div class="dash-header-row">
         <h2 style="margin: 0; color: var(--info); font-size: 1.2em;">Engine Dashboard (20,000 Tracks)</h2>
-        <button id="master-lfo-btn" style="background-color: var(--info); font-size: 1em; padding: 10px 20px;">▶ Start All LFOs</button>
+        
+        <!-- NEW: BATCH SETTINGS CONTROLS -->
+        <div class="dash-header-controls">
+            <div style="display: flex; align-items: center; gap: 5px;">
+                <label style="color: var(--danger); font-weight: bold;">Master Pattern:</label>
+                <select id="master-pattern-select" class="ui-num" style="width: 70px;">
+                    <option value="0">None</option>
+                    <option value="2" selected>2nd</option>
+                    <option value="3">3rd</option>
+                    <option value="4">4th</option>
+                    <option value="5">5th</option>
+                </select>
+                <button id="apply-master-pattern-btn" style="background-color: var(--danger); padding: 4px 10px; font-size: 0.85em; color: white;">Set All</button>
+            </div>
+            
+            <div class="divider"></div>
+            <button id="master-lfo-btn" style="background-color: var(--info); font-size: 1em; padding: 6px 15px;">▶ Start All LFOs</button>
+        </div>
     </div>
 
     <!-- ROW 2: ENGINES DASHBOARD (20 ENGINES) -->
@@ -262,7 +280,7 @@
             document.getElementById(id).addEventListener('input', updateBandpass);
         });
 
-        // --- INSTANCE DASHBOARD GENERATOR ---
+        // --- INSTANCE DASHBOARD GENERATOR (20 ENGINES) ---
         const instancesContainer = document.getElementById('instances-container');
         for(let i=0; i<ENGINE_COUNT; i++) {
             const defaultTime = i === 0 ? 5 : (i === 1 ? 30 : (i === 2 ? 60 : 10 + (i * 5)));
@@ -298,9 +316,21 @@
             </div>`;
         }
 
+        // --- BATCH SETTINGS / MASTER LFO LOGIC ---
         let engineLfoStates = Array(ENGINE_COUNT).fill(false);
         const masterLfoBtn = document.getElementById('master-lfo-btn');
         let masterLfoRunning = false;
+
+        document.getElementById('apply-master-pattern-btn').addEventListener('click', () => {
+            const masterPat = document.getElementById('master-pattern-select').value;
+            for (let i = 0; i < ENGINE_COUNT; i++) {
+                const patSelect = document.getElementById(`eng-pat-${i}`);
+                if (patSelect) {
+                    patSelect.value = masterPat;
+                    sendEngineConfig(i); // Syncs UI to AudioWorklet
+                }
+            }
+        });
 
         function checkMasterLfoState() {
             const anyRunning = engineLfoStates.some(state => state);
@@ -457,6 +487,7 @@
                 
                 microphone = audioContext.createMediaStreamSource(stream);
                 
+                // --- SETUP BANDPASS & FFT NODES ---
                 hpFilter = audioContext.createBiquadFilter(); hpFilter.type = 'highpass';
                 lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
                 
@@ -597,7 +628,6 @@
             setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); recordStatus.innerText = "Saved successfully!"; }, 100);
         }
 
-        // --- MASTER VISUALIZERS (OSC + FFT) ---
         function processVisualizer() {
             if (!isRunning) return;
             animationId = requestAnimationFrame(processVisualizer);
