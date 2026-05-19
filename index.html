@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - 20-Engine Data Array (v1.18.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.19.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -33,6 +33,7 @@
         select.ui-num { cursor: pointer; }
 
         /* INSTANCE DASHBOARD STYLES */
+        .dash-header-row { width: 100%; max-width: 1600px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px; box-sizing: border-box; }
         #instances-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; width: 100%; max-width: 1600px; margin-bottom: 10px; }
         .instance-card { background: var(--surface); border: 2px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.3s; }
         .instance-card.active-card { border-color: var(--primary); }
@@ -79,6 +80,12 @@
         </div>
     </div>
 
+    <!-- ENGINES DASHBOARD HEADER -->
+    <div class="dash-header-row">
+        <h2 style="margin: 0; color: var(--info); font-size: 1.2em;">Engine Dashboard (20,000 Tracks)</h2>
+        <button id="master-lfo-btn" style="background-color: var(--info); font-size: 1em; padding: 10px 20px;">▶ Start All LFOs</button>
+    </div>
+
     <!-- ROW 2: ENGINES DASHBOARD (20 ENGINES) -->
     <div id="instances-container"></div>
 
@@ -123,7 +130,7 @@
     </div>
 
     <script>
-        const ENGINE_COUNT = 20; // 20 Engines * 1000 Tracks = 20,000 Tracks
+        const ENGINE_COUNT = 20; 
 
         // --- 1. AUDIOWORKLET INJECTION ---
         const workletCode = `
@@ -132,15 +139,13 @@
                 super();
                 this.globalSampleCounter = 0;
                 
-                // Dynamically build 20 engine configurations
-                const engineArray = Array(20).fill().map((_, i) => ({
-                    active: true, // All enabled by default
+                const engineArray = Array(${ENGINE_COUNT}).fill().map((_, i) => ({
+                    active: true, 
                     tracks: 1000, 
                     patternN: 2, 
                     lfoActive: false, 
                     lfoStart: 1.0, 
                     lfoEnd: 0.0001, 
-                    // Stagger default times: 5, 30, 60, then 10, 15, 20...
                     lfoTime: i === 0 ? 5 : i === 1 ? 30 : i === 2 ? 60 : 10 + (i * 5), 
                     currentStep: 0.0001, 
                     lfoSamples: 0
@@ -168,7 +173,7 @@
                 const channelOut = output[0];
                 const numFrames = channelIn.length;
 
-                for (let e = 0; e < 20; e++) {
+                for (let e = 0; e < ${ENGINE_COUNT}; e++) {
                     let eng = this.config.engines[e];
                     if (eng.active && eng.lfoActive) {
                         const totalSamples = eng.lfoTime * sampleRate;
@@ -191,7 +196,7 @@
                     const val = allowed ? channelIn[i] : 0;
                     channelOut[i] = val; 
 
-                    for (let e = 0; e < 20; e++) {
+                    for (let e = 0; e < ${ENGINE_COUNT}; e++) {
                         let eng = this.config.engines[e];
                         if (!eng.active) continue;
                         for (let t = 0; t < eng.tracks; t++) {
@@ -221,10 +226,7 @@
         
         let liveMathNode, fxHubIn, fxHubOut, convolver, panner, outputGain, chopperOsc, chopperGain; 
         
-        // Visualizer Nodes
         let outAnalyser, outDataArray;
-        
-        // PRE-SCALE BANDPASS NODES
         let hpFilter, lpFilter, rawAnalyser, filteredAnalyser, rawFreqData, filteredFreqData;
         let micBypassGain, filteredGain;
 
@@ -260,7 +262,7 @@
             document.getElementById(id).addEventListener('input', updateBandpass);
         });
 
-        // --- INSTANCE DASHBOARD GENERATOR (20 ENGINES) ---
+        // --- INSTANCE DASHBOARD GENERATOR ---
         const instancesContainer = document.getElementById('instances-container');
         for(let i=0; i<ENGINE_COUNT; i++) {
             const defaultTime = i === 0 ? 5 : (i === 1 ? 30 : (i === 2 ? 60 : 10 + (i * 5)));
@@ -296,6 +298,35 @@
             </div>`;
         }
 
+        let engineLfoStates = Array(ENGINE_COUNT).fill(false);
+        const masterLfoBtn = document.getElementById('master-lfo-btn');
+        let masterLfoRunning = false;
+
+        function checkMasterLfoState() {
+            const anyRunning = engineLfoStates.some(state => state);
+            masterLfoRunning = anyRunning;
+            masterLfoBtn.innerText = masterLfoRunning ? '⏹ Stop All LFOs' : '▶ Start All LFOs';
+            masterLfoBtn.style.backgroundColor = masterLfoRunning ? 'var(--danger)' : 'var(--info)';
+        }
+
+        masterLfoBtn.addEventListener('click', () => {
+            if(!liveMathNode) { alert("Start Microphone First!"); return; }
+            masterLfoRunning = !masterLfoRunning;
+            
+            masterLfoBtn.innerText = masterLfoRunning ? '⏹ Stop All LFOs' : '▶ Start All LFOs';
+            masterLfoBtn.style.backgroundColor = masterLfoRunning ? 'var(--danger)' : 'var(--info)';
+
+            for (let i = 0; i < ENGINE_COUNT; i++) {
+                engineLfoStates[i] = masterLfoRunning;
+                const btn = document.getElementById(`eng-lfo-btn-${i}`);
+                if(btn) {
+                    btn.innerText = masterLfoRunning ? 'Stop' : 'Start';
+                    btn.style.background = masterLfoRunning ? 'var(--danger)' : 'var(--info)';
+                }
+                liveMathNode.port.postMessage({ type: 'updateEngine', index: i, engineData: { lfoActive: masterLfoRunning, lfoSamples: 0 } });
+            }
+        });
+
         function sendEngineConfig(idx) {
             if(!liveMathNode) return;
             const config = {
@@ -318,13 +349,14 @@
                 document.getElementById(prefix + i).addEventListener('input', () => sendEngineConfig(i));
                 document.getElementById(prefix + i).addEventListener('change', () => sendEngineConfig(i));
             });
-            let lfoRunning = false;
+            
             document.getElementById(`eng-lfo-btn-${i}`).addEventListener('click', (e) => {
                 if(!liveMathNode) { alert("Start Microphone First!"); return; }
-                lfoRunning = !lfoRunning;
-                e.target.innerText = lfoRunning ? 'Stop' : 'Start';
-                e.target.style.background = lfoRunning ? 'var(--danger)' : 'var(--info)';
-                liveMathNode.port.postMessage({ type: 'updateEngine', index: i, engineData: { lfoActive: lfoRunning, lfoSamples: 0 } });
+                engineLfoStates[i] = !engineLfoStates[i];
+                e.target.innerText = engineLfoStates[i] ? 'Stop' : 'Start';
+                e.target.style.background = engineLfoStates[i] ? 'var(--danger)' : 'var(--info)';
+                liveMathNode.port.postMessage({ type: 'updateEngine', index: i, engineData: { lfoActive: engineLfoStates[i], lfoSamples: 0 } });
+                checkMasterLfoState();
             });
         }
 
@@ -405,6 +437,15 @@
                 micBtn.classList.remove('active');
                 isRunning = false;
                 for(let i=0; i<ENGINE_COUNT; i++) document.getElementById(`led-${i}`).classList.remove('on'); 
+                
+                masterLfoRunning = false;
+                engineLfoStates.fill(false);
+                masterLfoBtn.innerText = '▶ Start All LFOs';
+                masterLfoBtn.style.backgroundColor = 'var(--info)';
+                for (let i = 0; i < ENGINE_COUNT; i++) {
+                    const btn = document.getElementById(`eng-lfo-btn-${i}`);
+                    if(btn) { btn.innerText = 'Start'; btn.style.background = 'var(--info)'; }
+                }
                 return;
             }
 
@@ -416,7 +457,6 @@
                 
                 microphone = audioContext.createMediaStreamSource(stream);
                 
-                // --- SETUP BANDPASS & FFT NODES ---
                 hpFilter = audioContext.createBiquadFilter(); hpFilter.type = 'highpass';
                 lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
                 
@@ -429,11 +469,9 @@
                 micBypassGain = audioContext.createGain(); micBypassGain.gain.value = 1;
                 filteredGain = audioContext.createGain(); filteredGain.gain.value = 0;
 
-                // Wire FFT graph feeds
                 microphone.connect(rawAnalyser);
                 microphone.connect(hpFilter); hpFilter.connect(lpFilter); lpFilter.connect(filteredAnalyser);
                 
-                // Wire to Math Engine
                 microphone.connect(micBypassGain);
                 lpFilter.connect(filteredGain);
 
@@ -463,7 +501,6 @@
                 chopperGain = audioContext.createGain(); chopperGain.gain.value = 0.5; 
                 chopperOsc.connect(chopperGain); chopperOsc.start();
 
-                // Connect Main Signal Chain
                 micBypassGain.connect(liveMathNode);
                 filteredGain.connect(liveMathNode);
                 liveMathNode.connect(outAnalyser);
@@ -480,7 +517,6 @@
                 
                 for(let i=0; i<ENGINE_COUNT; i++) { if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`led-${i}`).classList.add('on'); }
 
-                // Sync canvas resolutions
                 masterCanvas.width = masterCanvas.clientWidth; masterCanvas.height = masterCanvas.clientHeight;
                 fftCanvas.width = fftCanvas.clientWidth; fftCanvas.height = fftCanvas.clientHeight;
                 
