@@ -1,9 +1,9 @@
-# MicScaler 🎛️ (v1.16.0)
+# MicScaler 🎛️ (v1.19.0)
 **Multi-Instance Mathematical Scaling & Spectral Engine**
 
 MicScaler is a professional-grade, zero-dependency web application designed for high-throughput mathematical processing of live audio data. 
 
-It transforms your browser into a **3,000-channel mathematical processor**, isolating the processes of frequency bandpassing, multiplicative scaling, phase-interleaving, sample-accurate chopping, sub-millisecond gating, and background-proof data recording.
+It transforms your browser into a **20,000-channel mathematical processor**, isolating the processes of frequency bandpassing, multiplicative scaling, phase-interleaving, sample-accurate chopping, sub-millisecond gating, and background-proof data recording.
 
 ---
 
@@ -11,8 +11,8 @@ It transforms your browser into a **3,000-channel mathematical processor**, isol
 1. Download the `index.html` file. (No installation required).
 2. Open it in any modern web browser.
 3. **Shape:** Enable the Pre-Scale Bandpass to isolate specific frequencies, and verify the shape on the FFT Spectral Graph.
-4. **Scale:** Toggle up to 3 Independent Engines and hit **Start Microphone**.
-5. **Automate:** Use the Auto-Step LFO to create custom exponential sweeps across your track arrays.
+4. **Scale:** The app boots pre-configured with 20 parallel engines enabled (20,000 tracks). Hit **Start Microphone**.
+5. **Automate:** Click the master **▶ Start All LFOs** button to globally trigger a massive, staggered array sequence across all 20 engines simultaneously.
 6. **Record:** Set an auto-stop limit and capture the manipulated soundscape natively to `.wav`.
 
 ---
@@ -30,10 +30,11 @@ MicScaler now features a dual-canvas real-time visualizer layout.
 
 ### 📡 Spectral & Multi-Instance Processing
 *   **Pre-Scale Bandpass Filter:** Isolate high or low frequencies *before* they hit the math engine via a dual-biquad (HP/LP) node cluster.
-*   **Triple-Engine Topology:** Run up to 3 isolated math engines simultaneously, driving up to **3,000 parallel tracks**.
+*   **Massive Engine Topology:** Run up to **20 isolated math engines** simultaneously, driving up to **20,000 parallel tracks**.
 *   **Cascading Polarity Inversion:** Apply phase flipping via Master Invert, or use **Pattern Invert** to automatically flip interleaved tracks (e.g., every 2nd, 3rd, 4th, or 5th track).
 
 ### ⏱️ Sequence Automation (Auto-Step LFO)
+*   **Master LFO Control:** One-click global start/stop synchronization for all 20 internal engine LFOs.
 *   **Custom Boundary LFO:** Define arbitrary `Start` (High) and `End` (Low) scaling limits to automate the array spread.
 *   **Drift-Proof Audio Clock:** The LFO is driven by the native hardware audio sample rate (48,000Hz) inside the C++ background thread. **It is 100% immune to browser tab-throttling** and will loop endlessly in the background.
 
