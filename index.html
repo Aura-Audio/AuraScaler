@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - 20-Engine Data Array (v1.22.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.23.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -17,6 +17,7 @@
         .canvas-container { flex: 1 1 300px; display: flex; flex-direction: column; width: 100%; max-width: 600px; }
         .canvas-label { font-size: 0.85em; color: var(--info); margin-bottom: 5px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
         #master-canvas, #fft-canvas { width: 100%; height: 100px; background: #000; border-radius: 8px; border: 1px solid var(--border); box-shadow: inset 0 0 10px rgba(0,0,0,0.8); }
+        .aura-canvas { width: 100%; height: 80px; background: #000; border-radius: 8px; border: 1px solid #444; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); }
         
         .controls { background: var(--surface); padding: 15px 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: center; max-width: 1400px; width: 100%; box-sizing: border-box; }
         .control-group { display: flex; align-items: center; gap: 10px; }
@@ -51,7 +52,7 @@
         <p>Mathematical Multiplicative Scaling Engine</p>
     </div>
 
-    <!-- ANALYSIS DASHBOARD -->
+    <!-- MAIN ANALYSIS DASHBOARD -->
     <div class="canvas-row">
         <div class="canvas-container">
             <div class="canvas-label">Oscilloscope (Time Domain Output)</div>
@@ -84,13 +85,12 @@
         </div>
         <div class="control-group divider">
             <label>Low Cut (Hz):</label>
-            <input type="number" id="bp-low" class="ui-num" min="20" max="20000" value="300" style="width: 65px;">
+            <input type="number" id="bp-low" class="ui-num" min="20" max="20000" value="300" style="width: 70px;">
         </div>
         <div class="control-group divider">
             <label>High Cut (Hz):</label>
-            <input type="number" id="bp-high" class="ui-num" min="20" max="20000" value="22000" style="width: 65px;">
+            <input type="number" id="bp-high" class="ui-num" min="20" max="20000" value="22000" style="width: 70px;">
         </div>
-        <!-- NEW FEATURE: BANDPASS Q (STEEPNESS/RESONANCE) -->
         <div class="control-group divider">
             <label title="0.1 = Light | 0.7 = Med | 10+ = Hard/Resonant">Q (Slope):</label>
             <input type="number" id="bp-q" class="ui-num" min="0.01" max="40" step="0.1" value="0.7" style="width: 55px;">
@@ -128,20 +128,34 @@
     <!-- ROW 3: ENGINES DASHBOARD (20 ENGINES) -->
     <div id="instances-container"></div>
 
-    <!-- ROW 4: AURACONV ENGINE -->
-    <div class="controls" style="border-color: var(--aura); margin-top: 10px;">
-        <div class="control-group">
-            <label style="color: var(--aura); font-weight:bold;">AuraConv Comb Filter: </label>
-            <input type="number" id="ac-samples" class="ui-num" min="1" max="10000" value="100" style="width: 60px;">
-            <span style="font-size:0.8em; color:#aaa;">Samples</span>
-            <select id="ac-mode" class="ui-num" style="margin-left: 5px;">
-                <option value="burst">Burst (Allow)</option>
-                <option value="gap">Gap (Block)</option>
-            </select>
-            <input type="checkbox" id="ac-enable" style="margin-left: 5px;"> <span style="font-size:0.9em;">Enable</span>
+    <!-- ROW 4: AURACONV ENGINE (WITH DUAL ANALYSIS CANVASES) -->
+    <div class="controls" style="border-color: var(--aura); flex-direction: column;">
+        <div style="display:flex; flex-wrap:wrap; gap:15px; width:100%; justify-content:center; align-items:center;">
+            <div class="control-group">
+                <label style="color: var(--aura); font-weight:bold;">AuraConv Comb Filter: </label>
+                <input type="number" id="ac-samples" class="ui-num" min="5" max="5000" value="100" style="width: 60px;">
+                <span style="font-size:0.8em; color:#aaa;">Samples</span>
+                <select id="ac-mode" class="ui-num" style="margin-left: 5px;">
+                    <option value="burst">Burst (Allow)</option>
+                    <option value="gap">Gap (Block)</option>
+                </select>
+                <input type="checkbox" id="ac-enable" style="margin-left: 5px;"> <span style="font-size:0.9em;">Enable</span>
+            </div>
+            <div class="control-group divider"><input type="checkbox" id="ac-reverb"> <span style="font-size:0.9em; font-weight:bold;">Convolution Reverb</span></div>
+            <div class="control-group divider"><input type="checkbox" id="ac-rotate"> <span style="font-size:0.9em; font-weight:bold;">HRTF 3D Rotation</span></div>
         </div>
-        <div class="control-group divider"><input type="checkbox" id="ac-reverb"> <span style="font-size:0.9em; font-weight:bold;">Convolution Reverb</span></div>
-        <div class="control-group divider"><input type="checkbox" id="ac-rotate"> <span style="font-size:0.9em; font-weight:bold;">HRTF 3D Rotation</span></div>
+        
+        <!-- NEW AURACONV VISUALIZERS -->
+        <div class="canvas-row" style="margin-bottom: 0; margin-top: 15px;">
+            <div class="canvas-container">
+                <div class="canvas-label" style="color: var(--aura);">AuraConv Osc <span style="color:#aaa; font-weight:normal;">(Before: Gray | After: <span style="color:var(--aura);">Cyan</span>)</span></div>
+                <canvas id="aura-time-canvas" class="aura-canvas"></canvas>
+            </div>
+            <div class="canvas-container">
+                <div class="canvas-label" style="color: var(--aura);">AuraConv FFT <span style="color:#aaa; font-weight:normal;">(Before: Gray | After: <span style="color:var(--aura);">Cyan</span>)</span></div>
+                <canvas id="aura-fft-canvas" class="aura-canvas"></canvas>
+            </div>
+        </div>
     </div>
 
     <!-- ROW 5: HARDWARE GATING -->
@@ -158,7 +172,7 @@
         </div>
     </div>
 
-    <!-- NEW ROW 6: MASTER OUTPUT & ROUTING -->
+    <!-- ROW 6: MASTER OUTPUT & ROUTING -->
     <div class="controls" style="border-color: var(--primary);">
         <div class="control-group">
             <label style="color: var(--text); font-weight:bold;">Speaker Vol (%):</label>
@@ -183,7 +197,7 @@
     <script>
         const ENGINE_COUNT = 20; 
 
-        // --- 1. AUDIOWORKLET INJECTION ---
+        // --- 1. AUDIOWORKLET INJECTION (DUAL OUTPUT FOR AURACONV ANALYSIS) ---
         const workletCode = `
         class MicScalerProcessor extends AudioWorkletProcessor {
             constructor() {
@@ -191,15 +205,10 @@
                 this.globalSampleCounter = 0;
                 
                 const engineArray = Array(${ENGINE_COUNT}).fill().map((_, i) => ({
-                    active: true, 
-                    tracks: 1000, 
-                    patternN: 2, 
-                    lfoActive: false, 
-                    lfoStart: 1.0, 
-                    lfoEnd: 0.0001, 
+                    active: true, tracks: 1000, patternN: 2, lfoActive: false, 
+                    lfoStart: 1.0, lfoEnd: 0.0001, 
                     lfoTime: i === 0 ? 5 : i === 1 ? 30 : i === 2 ? 60 : 10 + (i * 5), 
-                    currentStep: 0.0001, 
-                    lfoSamples: 0
+                    currentStep: 0.0001, lfoSamples: 0
                 }));
 
                 this.config = {
@@ -216,12 +225,17 @@
                 };
                 this.statusFrameCount = 0;
             }
+            
             process(inputs, outputs) {
                 const input = inputs[0];
-                const output = outputs[0];
+                const outputMain = outputs[0];
+                const outputAura = outputs[1]; // Isolated AuraConv Output for Analysis
+                
                 if (!input || !input.length) return true;
+                
                 const channelIn = input[0];
-                const channelOut = output[0];
+                const channelOutMain = outputMain[0];
+                const channelOutAura = outputAura ? outputAura[0] : null;
                 const numFrames = channelIn.length;
 
                 for (let e = 0; e < ${ENGINE_COUNT}; e++) {
@@ -238,14 +252,21 @@
                 }
 
                 for (let i = 0; i < numFrames; i++) {
-                    let allowed = true;
-                    if (this.config.inGateEnabled && (Math.floor(this.globalSampleCounter / this.config.inGateSamples) % 2 !== 0)) allowed = false;
+                    let inGated = true;
+                    if (this.config.inGateEnabled && (Math.floor(this.globalSampleCounter / this.config.inGateSamples) % 2 !== 0)) inGated = false;
+                    
+                    let auraAllowed = true;
                     if (this.config.acEnabled) {
                         const chunk = Math.floor(this.globalSampleCounter / this.config.acSamples);
-                        if (this.config.acBurst ? !(chunk % 2 === 0) : (chunk % 2 === 0)) allowed = false;
+                        if (this.config.acBurst ? !(chunk % 2 === 0) : (chunk % 2 === 0)) auraAllowed = false;
                     }
-                    const val = allowed ? channelIn[i] : 0;
-                    channelOut[i] = val; 
+                    
+                    // Route 1: Clean AuraConv Output (Only affected by Aura gate, sent to Analysis Canvas)
+                    if (channelOutAura) channelOutAura[i] = auraAllowed ? channelIn[i] : 0;
+
+                    // Route 2: Main Scaler Output (Affected by Math Gate + Aura Gate)
+                    const val = (inGated && auraAllowed) ? channelIn[i] : 0;
+                    channelOutMain[i] = val; 
 
                     for (let e = 0; e < ${ENGINE_COUNT}; e++) {
                         let eng = this.config.engines[e];
@@ -280,8 +301,10 @@
         // METERING & PRE/POST NODES
         let hpFilter, lpFilter, rawAnalyser, postGainAnalyser, filteredAnalyser;
         let speakerPreAnalyser, speakerPostAnalyser, speakerVolNode;
-        let rawFreqData, filteredFreqData;
-        let rawTimeData, postTimeData, outPreTimeData, outPostTimeData;
+        let auraAnalyser; // New Analyser specifically for the AuraConv isolated output
+        
+        let rawFreqData, filteredFreqData, auraFreqData;
+        let rawTimeData, postTimeData, outPreTimeData, outPostTimeData, auraTimeData;
         let micBypassGain, filteredGain, preGainNode;
 
         let isRecording = false, mediaRecorder = null, recordedChunks =[], recordStartTime = 0, recordLimitSecs = 300;
@@ -296,6 +319,11 @@
         const masterCtx = masterCanvas.getContext('2d', { alpha: false });
         const fftCanvas = document.getElementById('fft-canvas');
         const fftCtx = fftCanvas.getContext('2d', { alpha: false });
+        
+        const auraTimeCanvas = document.getElementById('aura-time-canvas');
+        const auraTimeCtx = auraTimeCanvas.getContext('2d', { alpha: false });
+        const auraFFTCanvas = document.getElementById('aura-fft-canvas');
+        const auraFFTCtx = auraFFTCanvas.getContext('2d', { alpha: false });
         
         let inToggleEnabled = true; 
 
@@ -536,7 +564,7 @@
                 
                 microphone = audioContext.createMediaStreamSource(stream);
                 
-                // --- SETUP PRE-GAIN & INPUT METERING ---
+                // --- SETUP PRE-GAIN & METERING ---
                 preGainNode = audioContext.createGain();
                 const initVol = parseFloat(document.getElementById('mic-vol-pct').value) || 100;
                 preGainNode.gain.value = initVol / 100.0;
@@ -549,10 +577,16 @@
                 lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
                 filteredAnalyser = audioContext.createAnalyser(); filteredAnalyser.fftSize = 2048;
                 
+                // --- SETUP AURACONV ANALYSER ---
+                auraAnalyser = audioContext.createAnalyser(); auraAnalyser.fftSize = 2048;
+                
                 rawFreqData = new Uint8Array(rawAnalyser.frequencyBinCount);
                 filteredFreqData = new Uint8Array(filteredAnalyser.frequencyBinCount);
+                auraFreqData = new Uint8Array(auraAnalyser.frequencyBinCount);
+                
                 rawTimeData = new Float32Array(rawAnalyser.frequencyBinCount);
                 postTimeData = new Float32Array(postGainAnalyser.frequencyBinCount);
+                auraTimeData = new Float32Array(auraAnalyser.frequencyBinCount);
 
                 micBypassGain = audioContext.createGain(); micBypassGain.gain.value = 1;
                 filteredGain = audioContext.createGain(); filteredGain.gain.value = 0;
@@ -565,7 +599,8 @@
                 preGainNode.connect(micBypassGain);
                 lpFilter.connect(filteredGain);
 
-                liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor');
+                // Configure Worklet for 2 outputs (Main + AuraConv Isolated)
+                liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor', { numberOfInputs: 1, numberOfOutputs: 2 });
                 liveMathNode.port.onmessage = (e) => {
                     if (e.data.type === 'status') {
                         for(let i=0; i<ENGINE_COUNT; i++) {
@@ -579,9 +614,10 @@
                 for(let i=0; i<ENGINE_COUNT; i++) sendEngineConfig(i); 
                 document.getElementById('apply-master-engines-btn').click();
 
-                // --- SETUP MASTER OUTPUT & ROUTING ---
-                fxHubIn = audioContext.createGain(); 
-                fxHubOut = audioContext.createGain();
+                outAnalyser = audioContext.createAnalyser(); outAnalyser.fftSize = 1024;
+                outDataArray = new Float32Array(outAnalyser.frequencyBinCount);
+
+                fxHubIn = audioContext.createGain(); fxHubOut = audioContext.createGain();
                 
                 speakerPreAnalyser = audioContext.createAnalyser(); speakerPreAnalyser.fftSize = 2048;
                 speakerPostAnalyser = audioContext.createAnalyser(); speakerPostAnalyser.fftSize = 2048;
@@ -601,14 +637,16 @@
                 chopperGain = audioContext.createGain(); chopperGain.gain.value = 0.5; 
                 chopperOsc.connect(chopperGain); chopperOsc.start();
 
-                // Main Signal Chain routing
+                // Connect Main Signal Chain
                 micBypassGain.connect(liveMathNode);
                 filteredGain.connect(liveMathNode);
                 
-                outAnalyser = audioContext.createAnalyser(); outAnalyser.fftSize = 1024;
-                outDataArray = new Float32Array(outAnalyser.frequencyBinCount);
+                // Connect Main Math Node Output (0)
+                liveMathNode.connect(outAnalyser, 0, 0);
                 
-                liveMathNode.connect(outAnalyser);
+                // Connect Isolated AuraConv Output (1) to Visualizer
+                liveMathNode.connect(auraAnalyser, 1, 0);
+                
                 outAnalyser.connect(fxHubIn);
                 updateFXRouting();
                 
@@ -629,6 +667,8 @@
 
                 masterCanvas.width = masterCanvas.clientWidth; masterCanvas.height = masterCanvas.clientHeight;
                 fftCanvas.width = fftCanvas.clientWidth; fftCanvas.height = fftCanvas.clientHeight;
+                auraTimeCanvas.width = auraTimeCanvas.clientWidth; auraTimeCanvas.height = auraTimeCanvas.clientHeight;
+                auraFFTCanvas.width = auraFFTCanvas.clientWidth; auraFFTCanvas.height = auraFFTCanvas.clientHeight;
                 
                 processVisualizer();
             } catch (err) { alert('Error accessing microphone: ' + err); }
@@ -724,15 +764,13 @@
                 panner.positionZ.setValueAtTime(Math.cos(t * 2.0) * 2, t);
             }
 
-            // DB Meter Updates (Throttled to 10fps)
+            // DB Meter Updates
             if (timestamp - lastMeterUpdate > 100) {
-                // Mic Input
                 rawAnalyser.getFloatTimeDomainData(rawTimeData);
                 postGainAnalyser.getFloatTimeDomainData(postTimeData);
                 document.getElementById('meter-raw').innerText = getDB(rawTimeData).toFixed(1) + ' dB';
                 document.getElementById('meter-post').innerText = getDB(postTimeData).toFixed(1) + ' dB';
 
-                // Speaker Output
                 speakerPreAnalyser.getFloatTimeDomainData(outPreTimeData);
                 speakerPostAnalyser.getFloatTimeDomainData(outPostTimeData);
                 document.getElementById('meter-out-pre').innerText = getDB(outPreTimeData).toFixed(1) + ' dB';
@@ -741,11 +779,12 @@
                 lastMeterUpdate = timestamp;
             }
 
+            // 1. MASTER OSCILLOSCOPE
             outAnalyser.getFloatTimeDomainData(outDataArray);
-            const dataLength = outDataArray.length;
+            let dataLength = outDataArray.length;
             masterCtx.fillStyle = '#000000'; masterCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
             masterCtx.lineWidth = 2; masterCtx.strokeStyle = '#bb86fc'; masterCtx.beginPath();
-            const sliceWidth = masterCanvas.width / dataLength; const heightHalf = masterCanvas.height / 2;
+            let sliceWidth = masterCanvas.width / dataLength; let heightHalf = masterCanvas.height / 2;
             let x = 0;
             for (let i = 0; i < dataLength; i++) {
                 const y = (outDataArray[i] * heightHalf) + heightHalf;
@@ -753,24 +792,21 @@
             }
             masterCtx.stroke();
 
+            // 2. FFT BANDPASS GRAPH
             rawAnalyser.getByteFrequencyData(rawFreqData);
             filteredAnalyser.getByteFrequencyData(filteredFreqData);
 
-            fftCtx.fillStyle = '#000000';
-            fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
+            fftCtx.fillStyle = '#000000'; fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
+            let fftLen = rawAnalyser.frequencyBinCount;
+            let fWidth = fftCanvas.width / fftLen;
 
-            const fftLen = rawAnalyser.frequencyBinCount;
-            const fWidth = fftCanvas.width / fftLen;
-
-            fftCtx.beginPath();
-            fftCtx.moveTo(0, fftCanvas.height);
+            fftCtx.beginPath(); fftCtx.moveTo(0, fftCanvas.height);
             for(let i = 0; i < fftLen; i++) {
                 const v = rawFreqData[i] / 255.0;
                 fftCtx.lineTo(i * fWidth, fftCanvas.height - (v * fftCanvas.height));
             }
             fftCtx.lineTo(fftCanvas.width, fftCanvas.height);
-            fftCtx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            fftCtx.fill();
+            fftCtx.fillStyle = 'rgba(255, 255, 255, 0.2)'; fftCtx.fill();
 
             fftCtx.beginPath();
             for(let i = 0; i < fftLen; i++) {
@@ -778,9 +814,57 @@
                 const y = fftCanvas.height - (v * fftCanvas.height);
                 i === 0 ? fftCtx.moveTo(i * fWidth, y) : fftCtx.lineTo(i * fWidth, y);
             }
-            fftCtx.strokeStyle = 'var(--bp)';
-            fftCtx.lineWidth = 2;
-            fftCtx.stroke();
+            fftCtx.strokeStyle = 'var(--bp)'; fftCtx.lineWidth = 2; fftCtx.stroke();
+            
+            // 3. AURACONV ANALYSIS DASHBOARD (Oscilloscope)
+            // Grab pre-math, pre-aura input from the filtered analyser to act as "Before" state
+            filteredAnalyser.getFloatTimeDomainData(rawTimeData); 
+            auraAnalyser.getFloatTimeDomainData(auraTimeData);
+            
+            auraTimeCtx.fillStyle = '#000000'; auraTimeCtx.fillRect(0, 0, auraTimeCanvas.width, auraTimeCanvas.height);
+            dataLength = rawTimeData.length;
+            sliceWidth = auraTimeCanvas.width / dataLength;
+            heightHalf = auraTimeCanvas.height / 2;
+            
+            // Draw "Before" AuraConv (Gray)
+            auraTimeCtx.lineWidth = 1; auraTimeCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; auraTimeCtx.beginPath();
+            x = 0;
+            for (let i = 0; i < dataLength; i++) {
+                const y = (rawTimeData[i] * heightHalf) + heightHalf;
+                i === 0 ? auraTimeCtx.moveTo(x, y) : auraTimeCtx.lineTo(x, y); x += sliceWidth;
+            }
+            auraTimeCtx.stroke();
+            
+            // Draw "After" AuraConv (Cyan)
+            auraTimeCtx.lineWidth = 1.5; auraTimeCtx.strokeStyle = 'var(--aura)'; auraTimeCtx.beginPath();
+            x = 0;
+            for (let i = 0; i < dataLength; i++) {
+                const y = (auraTimeData[i] * heightHalf) + heightHalf;
+                i === 0 ? auraTimeCtx.moveTo(x, y) : auraTimeCtx.lineTo(x, y); x += sliceWidth;
+            }
+            auraTimeCtx.stroke();
+
+            // 4. AURACONV ANALYSIS DASHBOARD (FFT Comb Harmonics)
+            auraAnalyser.getByteFrequencyData(auraFreqData);
+            auraFFTCtx.fillStyle = '#000000'; auraFFTCtx.fillRect(0, 0, auraFFTCanvas.width, auraFFTCanvas.height);
+            
+            // Draw "Before" AuraConv FFT (Gray)
+            auraFFTCtx.beginPath(); auraFFTCtx.moveTo(0, auraFFTCanvas.height);
+            for(let i = 0; i < fftLen; i++) {
+                const v = filteredFreqData[i] / 255.0;
+                auraFFTCtx.lineTo(i * fWidth, auraFFTCanvas.height - (v * auraFFTCanvas.height));
+            }
+            auraFFTCtx.lineTo(auraFFTCanvas.width, auraFFTCanvas.height);
+            auraFFTCtx.fillStyle = 'rgba(255, 255, 255, 0.2)'; auraFFTCtx.fill();
+
+            // Draw "After" AuraConv FFT (Cyan)
+            auraFFTCtx.beginPath();
+            for(let i = 0; i < fftLen; i++) {
+                const v = auraFreqData[i] / 255.0;
+                const y = auraFFTCanvas.height - (v * auraFFTCanvas.height);
+                i === 0 ? auraFFTCtx.moveTo(i * fWidth, y) : auraFFTCtx.lineTo(i * fWidth, y);
+            }
+            auraFFTCtx.strokeStyle = 'var(--aura)'; auraFFTCtx.lineWidth = 1.5; auraFFTCtx.stroke();
         }
 
         document.getElementById('mic-btn').addEventListener('click', toggleMic);
