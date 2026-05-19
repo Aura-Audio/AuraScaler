@@ -1,9 +1,9 @@
-# MicScaler 🎛️ (v1.21.0)
+# MicScaler 🎛️ (v1.22.0)
 **Multi-Instance Mathematical Scaling & Spectral Engine**
 
 MicScaler is a professional-grade, zero-dependency web application designed for high-throughput mathematical processing of live audio data. 
 
-It transforms your browser into a **20,000-channel mathematical processor**, isolating the processes of pre-gain structuring, frequency bandpassing, multiplicative scaling, phase-interleaving, and sub-millisecond hardware gating.
+It transforms your browser into a **20,000-channel mathematical processor**, isolating the processes of pre-gain structuring, resonant frequency bandpassing, multiplicative scaling, phase-interleaving, sub-millisecond hardware gating, and master output metering.
 
 ---
 
@@ -11,9 +11,10 @@ It transforms your browser into a **20,000-channel mathematical processor**, iso
 1. Download the `index.html` file. (No installation required).
 2. Open it in any modern web browser.
 3. **Gain Stage:** Use the `Mic Vol (%)` to digitally trim your hardware microphone input, observing the Real-Time dB Meter to prevent clipping.
-4. **Shape:** Enable the Pre-Scale Bandpass to isolate specific frequencies, and verify the shape on the FFT Spectral Graph.
+4. **Shape:** Enable the Pre-Scale Bandpass to isolate specific frequencies, and verify the shape on the FFT Spectral Graph. Adjust the **Q (Slope)** to create hard resonant peaks or smooth rolloffs.
 5. **Architect:** Use the Master Dashboard to spawn anywhere between 1 and 20 Math Engines, dynamically assigning up to 1,000 tracks per engine.
 6. **Automate:** Click the master **▶ Start All LFOs** button to globally trigger a massive, staggered array sequence across your active engines simultaneously.
+7. **Master Output:** Limit the final volume hitting your speakers to protect your hardware using the `Out Vol (%)` module.
 
 ---
 
@@ -23,7 +24,7 @@ MicScaler now features a dual-canvas real-time visualizer layout.
 *   **FFT Spectral Distribution (Frequency Domain):** Shows a real-time Fast Fourier Transform (FFT) analysis of your raw microphone hardware. 
     *   **Gray Background:** The total acoustic energy captured by the physical microphone.
     *   **Green Outline:** The isolated frequency distribution actively passing through the Bandpass Filter and into the math engine.
-*   **Throttled RMS Metering:** Shows absolute hardware decibel (dB) levels before and after your percentage-based Input Gain modifications.
+*   **Throttled RMS Metering (Input & Output):** Shows absolute hardware decibel (dB) levels before and after your percentage-based Input Gain modifications, as well as the final levels being pushed to the physical speakers.
 
 ---
 
@@ -31,7 +32,7 @@ MicScaler now features a dual-canvas real-time visualizer layout.
 
 ### 📡 Spectral & Multi-Instance Processing
 *   **Pre-Gain Structuring:** Trim or boost your microphone data via percentage multiplication prior to any array processing.
-*   **Pre-Scale Bandpass Filter:** Isolate high or low frequencies *before* they hit the math engine via a dual-biquad (HP/LP) node cluster.
+*   **Pre-Scale Resonant Bandpass Filter:** Isolate frequencies *before* they hit the math engine via a dual-biquad node cluster. Features a **Q Factor (Resonance)** control allowing for Light (0.1), Medium (0.7), and Hard (10+) steepness slopes.
 *   **Master Architect Configurator:** Dynamically manage UI and computational load by actively defining how many Math Engines (1-20) and how many tracks per engine (1-1000) your processor should allocate.
 *   **Batch Phase Interleaving:** Pushes uniform phase cancellation rules across all engines (e.g., Inverting every 2nd or 4th track). 
 
