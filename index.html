@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - 20-Engine Data Array (v1.23.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.24.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -52,7 +52,7 @@
         <p>Mathematical Multiplicative Scaling Engine</p>
     </div>
 
-    <!-- MAIN ANALYSIS DASHBOARD -->
+    <!-- ANALYSIS DASHBOARD -->
     <div class="canvas-row">
         <div class="canvas-container">
             <div class="canvas-label">Oscilloscope (Time Domain Output)</div>
@@ -105,7 +105,7 @@
                 <label style="color: var(--primary); font-weight: bold;">Engines:</label>
                 <input type="number" id="master-engines-count" class="ui-num" min="1" max="20" value="20" style="width: 50px;">
                 <label style="color: var(--primary); font-weight: bold; margin-left: 5px;">Tracks/Engine:</label>
-                <input type="number" id="master-tracks-count" class="ui-num" min="1" max="1000" value="1000" style="width: 60px;">
+                <input type="number" id="master-tracks-count" class="ui-num" min="1" max="1000" value="100" style="width: 60px;">
                 <button id="apply-master-engines-btn" style="background-color: var(--primary); padding: 4px 10px; font-size: 0.85em; color: black;">Apply Base</button>
             </div>
             <div class="divider"></div>
@@ -129,14 +129,14 @@
     <div id="instances-container"></div>
 
     <!-- ROW 4: AURACONV ENGINE (WITH DUAL ANALYSIS CANVASES) -->
-    <div class="controls" style="border-color: var(--aura); flex-direction: column;">
+    <div class="controls" style="border-color: var(--aura); flex-direction: column; margin-top: 10px;">
         <div style="display:flex; flex-wrap:wrap; gap:15px; width:100%; justify-content:center; align-items:center;">
             <div class="control-group">
                 <label style="color: var(--aura); font-weight:bold;">AuraConv Comb Filter: </label>
                 <input type="number" id="ac-samples" class="ui-num" min="5" max="5000" value="100" style="width: 60px;">
                 <span style="font-size:0.8em; color:#aaa;">Samples</span>
                 <select id="ac-mode" class="ui-num" style="margin-left: 5px;">
-                    <option value="burst">Burst (Allow)</option>
+                    <option value="burst" selected>Burst (Allow)</option>
                     <option value="gap">Gap (Block)</option>
                 </select>
                 <input type="checkbox" id="ac-enable" style="margin-left: 5px;"> <span style="font-size:0.9em;">Enable</span>
@@ -145,7 +145,7 @@
             <div class="control-group divider"><input type="checkbox" id="ac-rotate"> <span style="font-size:0.9em; font-weight:bold;">HRTF 3D Rotation</span></div>
         </div>
         
-        <!-- NEW AURACONV VISUALIZERS -->
+        <!-- AURACONV VISUALIZERS -->
         <div class="canvas-row" style="margin-bottom: 0; margin-top: 15px;">
             <div class="canvas-container">
                 <div class="canvas-label" style="color: var(--aura);">AuraConv Osc <span style="color:#aaa; font-weight:normal;">(Before: Gray | After: <span style="color:var(--aura);">Cyan</span>)</span></div>
@@ -197,18 +197,24 @@
     <script>
         const ENGINE_COUNT = 20; 
 
-        // --- 1. AUDIOWORKLET INJECTION (DUAL OUTPUT FOR AURACONV ANALYSIS) ---
+        // --- 1. AUDIOWORKLET INJECTION (THROTTLED STATUS & BATCH IPC) ---
         const workletCode = `
         class MicScalerProcessor extends AudioWorkletProcessor {
             constructor() {
                 super();
                 this.globalSampleCounter = 0;
                 
+                // Construct Engine defaults corresponding to user screenshot
                 const engineArray = Array(${ENGINE_COUNT}).fill().map((_, i) => ({
-                    active: true, tracks: 1000, patternN: 2, lfoActive: false, 
-                    lfoStart: 1.0, lfoEnd: 0.0001, 
-                    lfoTime: i === 0 ? 5 : i === 1 ? 30 : i === 2 ? 60 : 10 + (i * 5), 
-                    currentStep: 0.0001, lfoSamples: 0
+                    active: true, 
+                    tracks: 100, 
+                    patternN: 2, 
+                    lfoActive: false, 
+                    lfoStart: 1.0, 
+                    lfoEnd: 0.0001, 
+                    lfoTime: i === 0 ? 1 : i === 1 ? 2 : i === 2 ? 3 : 25 + ((i - 3) * 5), 
+                    currentStep: 0.0001, 
+                    lfoSamples: 0
                 }));
 
                 this.config = {
@@ -218,9 +224,17 @@
                 };
 
                 this.port.onmessage = (e) => {
-                    if (e.data.type === 'config') this.config = { ...this.config, ...e.data };
+                    if (e.data.type === 'config') {
+                        this.config = { ...this.config, ...e.data };
+                    }
                     if (e.data.type === 'updateEngine') {
                         this.config.engines[e.data.index] = { ...this.config.engines[e.data.index], ...e.data.engineData };
+                    }
+                    // NEW: Batch Processing to prevent message dropping on Mobile
+                    if (e.data.type === 'bulkUpdateEngines') {
+                        e.data.updates.forEach(upd => {
+                            this.config.engines[upd.index] = { ...this.config.engines[upd.index], ...upd.engineData };
+                        });
                     }
                 };
                 this.statusFrameCount = 0;
@@ -229,7 +243,7 @@
             process(inputs, outputs) {
                 const input = inputs[0];
                 const outputMain = outputs[0];
-                const outputAura = outputs[1]; // Isolated AuraConv Output for Analysis
+                const outputAura = outputs[1]; 
                 
                 if (!input || !input.length) return true;
                 
@@ -261,10 +275,8 @@
                         if (this.config.acBurst ? !(chunk % 2 === 0) : (chunk % 2 === 0)) auraAllowed = false;
                     }
                     
-                    // Route 1: Clean AuraConv Output (Only affected by Aura gate, sent to Analysis Canvas)
                     if (channelOutAura) channelOutAura[i] = auraAllowed ? channelIn[i] : 0;
 
-                    // Route 2: Main Scaler Output (Affected by Math Gate + Aura Gate)
                     const val = (inGated && auraAllowed) ? channelIn[i] : 0;
                     channelOutMain[i] = val; 
 
@@ -280,7 +292,9 @@
                     this.globalSampleCounter++;
                 }
 
-                if (this.statusFrameCount++ > 5) {
+                // HIGHLY THROTTLED UI UPDATE: Approx 12 frames a second instead of 75. 
+                // Eradicates layout thrashing and freezing on mobile Chrome.
+                if (this.statusFrameCount++ > 30) {
                     this.port.postMessage({ type: 'status', steps: this.config.engines.map(e => e.currentStep) });
                     this.statusFrameCount = 0;
                 }
@@ -297,11 +311,11 @@
         let isRunning = false, animationId;
         
         let liveMathNode, fxHubIn, fxHubOut, convolver, panner, outputGain, chopperOsc, chopperGain; 
+        let outAnalyser, outDataArray;
         
-        // METERING & PRE/POST NODES
         let hpFilter, lpFilter, rawAnalyser, postGainAnalyser, filteredAnalyser;
         let speakerPreAnalyser, speakerPostAnalyser, speakerVolNode;
-        let auraAnalyser; // New Analyser specifically for the AuraConv isolated output
+        let auraAnalyser; 
         
         let rawFreqData, filteredFreqData, auraFreqData;
         let rawTimeData, postTimeData, outPreTimeData, outPostTimeData, auraTimeData;
@@ -310,6 +324,10 @@
         let isRecording = false, mediaRecorder = null, recordedChunks =[], recordStartTime = 0, recordLimitSecs = 300;
         let scriptProcessor = null, wavAudioBuffer =[]; 
         let lastMeterUpdate = 0; 
+
+        // DOM Caches to prevent document.getElementById thrashing inside fast loops
+        let uiReadoutEls = [];
+        let uiActiveEls = [];
 
         const micBtn = document.getElementById('mic-btn');
         const audioOutputToggle = document.getElementById('audio-output-toggle');
@@ -365,7 +383,7 @@
         // --- INSTANCE DASHBOARD GENERATOR ---
         const instancesContainer = document.getElementById('instances-container');
         for(let i=0; i<ENGINE_COUNT; i++) {
-            const defaultTime = i === 0 ? 5 : (i === 1 ? 30 : (i === 2 ? 60 : 10 + (i * 5)));
+            const defaultTime = i === 0 ? 1 : i === 1 ? 2 : i === 2 ? 3 : 25 + ((i - 3) * 5);
             instancesContainer.innerHTML += `
             <div class="instance-card active-card" id="card-${i}">
                 <div class="instance-header"><span>Engine ${i + 1}</span>
@@ -374,7 +392,7 @@
                         <div id="led-${i}" class="led-indicator"></div>
                     </div>
                 </div>
-                <div class="instance-row"><label>Tracks:</label><input type="number" id="eng-tracks-${i}" class="ui-num" min="1" max="1000" value="1000" style="width: 50px;"></div>
+                <div class="instance-row"><label>Tracks:</label><input type="number" id="eng-tracks-${i}" class="ui-num" min="1" max="1000" value="100" style="width: 50px;"></div>
                 <div class="instance-row"><label style="color:var(--danger);">Pattern:</label>
                     <select id="eng-pat-${i}" class="ui-num" style="width: 60px;">
                         <option value="0">None</option><option value="2" selected>2nd</option><option value="3">3rd</option><option value="4">4th</option><option value="5">5th</option>
@@ -397,6 +415,12 @@
             </div>`;
         }
 
+        // Cache DOM nodes for High-Performance UI updates
+        for(let i=0; i<ENGINE_COUNT; i++) {
+            uiReadoutEls[i] = document.getElementById(`eng-readout-${i}`);
+            uiActiveEls[i] = document.getElementById(`eng-active-${i}`);
+        }
+
         // --- BATCH SETTINGS & MASTER CONTROLS ---
         let engineLfoStates = Array(ENGINE_COUNT).fill(false);
         const masterLfoBtn = document.getElementById('master-lfo-btn');
@@ -404,23 +428,41 @@
 
         document.getElementById('apply-master-engines-btn').addEventListener('click', () => {
             const engCount = Math.max(1, Math.min(20, parseInt(document.getElementById('master-engines-count').value) || 20));
-            const trkCount = Math.max(1, Math.min(1000, parseInt(document.getElementById('master-tracks-count').value) || 1000));
+            const trkCount = Math.max(1, Math.min(1000, parseInt(document.getElementById('master-tracks-count').value) || 100));
+            
+            let bulkUpdates = [];
             for (let i = 0; i < ENGINE_COUNT; i++) {
                 const card = document.getElementById(`card-${i}`);
                 const activeCheckbox = document.getElementById(`eng-active-${i}`);
                 const tracksInput = document.getElementById(`eng-tracks-${i}`);
+                
                 if (i < engCount) { card.style.display = 'flex'; activeCheckbox.checked = true; tracksInput.value = trkCount; } 
                 else { card.style.display = 'none'; activeCheckbox.checked = false; }
-                sendEngineConfig(i); 
+
+                bulkUpdates.push({
+                    index: i,
+                    engineData: {
+                        active: activeCheckbox.checked,
+                        tracks: trkCount,
+                        patternN: parseInt(document.getElementById(`eng-pat-${i}`).value) || 0,
+                        lfoStart: parseFloat(document.getElementById(`eng-start-${i}`).value) || 1.0,
+                        lfoEnd: parseFloat(document.getElementById(`eng-end-${i}`).value) || 0.0001,
+                        lfoTime: parseFloat(document.getElementById(`eng-time-${i}`).value) || 15
+                    }
+                });
             }
+            if (liveMathNode) liveMathNode.port.postMessage({ type: 'bulkUpdateEngines', updates: bulkUpdates });
         });
 
         document.getElementById('apply-master-pattern-btn').addEventListener('click', () => {
             const masterPat = document.getElementById('master-pattern-select').value;
+            let bulkUpdates = [];
             for (let i = 0; i < ENGINE_COUNT; i++) {
                 const patSelect = document.getElementById(`eng-pat-${i}`);
-                if (patSelect) { patSelect.value = masterPat; sendEngineConfig(i); }
+                if (patSelect) patSelect.value = masterPat; 
+                bulkUpdates.push({ index: i, engineData: { patternN: parseInt(masterPat) || 0 } });
             }
+            if (liveMathNode) liveMathNode.port.postMessage({ type: 'bulkUpdateEngines', updates: bulkUpdates });
         });
 
         function checkMasterLfoState() {
@@ -436,19 +478,21 @@
             masterLfoBtn.innerText = masterLfoRunning ? '⏹ Stop All LFOs' : '▶ Start All LFOs';
             masterLfoBtn.style.backgroundColor = masterLfoRunning ? 'var(--danger)' : 'var(--info)';
 
+            let bulkUpdates = [];
             for (let i = 0; i < ENGINE_COUNT; i++) {
                 engineLfoStates[i] = masterLfoRunning;
                 const btn = document.getElementById(`eng-lfo-btn-${i}`);
                 if(btn) { btn.innerText = masterLfoRunning ? 'Stop' : 'Start'; btn.style.background = masterLfoRunning ? 'var(--danger)' : 'var(--info)'; }
-                liveMathNode.port.postMessage({ type: 'updateEngine', index: i, engineData: { lfoActive: masterLfoRunning, lfoSamples: 0 } });
+                bulkUpdates.push({ index: i, engineData: { lfoActive: masterLfoRunning, lfoSamples: 0 } });
             }
+            liveMathNode.port.postMessage({ type: 'bulkUpdateEngines', updates: bulkUpdates });
         });
 
         function sendEngineConfig(idx) {
             if(!liveMathNode) return;
             const config = {
                 active: document.getElementById(`eng-active-${idx}`).checked,
-                tracks: parseInt(document.getElementById(`eng-tracks-${idx}`).value) || 1000,
+                tracks: parseInt(document.getElementById(`eng-tracks-${idx}`).value) || 100,
                 patternN: parseInt(document.getElementById(`eng-pat-${idx}`).value) || 0,
                 lfoStart: parseFloat(document.getElementById(`eng-start-${idx}`).value) || 1.0,
                 lfoEnd: parseFloat(document.getElementById(`eng-end-${idx}`).value) || 0.0001,
@@ -564,7 +608,6 @@
                 
                 microphone = audioContext.createMediaStreamSource(stream);
                 
-                // --- SETUP PRE-GAIN & METERING ---
                 preGainNode = audioContext.createGain();
                 const initVol = parseFloat(document.getElementById('mic-vol-pct').value) || 100;
                 preGainNode.gain.value = initVol / 100.0;
@@ -572,12 +615,10 @@
                 rawAnalyser = audioContext.createAnalyser(); rawAnalyser.fftSize = 2048;
                 postGainAnalyser = audioContext.createAnalyser(); postGainAnalyser.fftSize = 2048;
 
-                // --- SETUP BANDPASS & FFT NODES ---
                 hpFilter = audioContext.createBiquadFilter(); hpFilter.type = 'highpass';
                 lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
                 filteredAnalyser = audioContext.createAnalyser(); filteredAnalyser.fftSize = 2048;
                 
-                // --- SETUP AURACONV ANALYSER ---
                 auraAnalyser = audioContext.createAnalyser(); auraAnalyser.fftSize = 2048;
                 
                 rawFreqData = new Uint8Array(rawAnalyser.frequencyBinCount);
@@ -599,19 +640,19 @@
                 preGainNode.connect(micBypassGain);
                 lpFilter.connect(filteredGain);
 
-                // Configure Worklet for 2 outputs (Main + AuraConv Isolated)
                 liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor', { numberOfInputs: 1, numberOfOutputs: 2 });
                 liveMathNode.port.onmessage = (e) => {
                     if (e.data.type === 'status') {
+                        // Cached DOM update for massive mobile performance boost
                         for(let i=0; i<ENGINE_COUNT; i++) {
-                            if(document.getElementById(`eng-active-${i}`).checked) document.getElementById(`eng-readout-${i}`).innerText = e.data.steps[i].toFixed(4);
+                            if(uiActiveEls[i].checked) uiReadoutEls[i].innerText = e.data.steps[i].toFixed(4);
                         }
                     }
                 };
 
                 updateBandpass();
                 updateGlobalWorklet();
-                for(let i=0; i<ENGINE_COUNT; i++) sendEngineConfig(i); 
+                // We don't loop here anymore, apply-master handles the batch
                 document.getElementById('apply-master-engines-btn').click();
 
                 outAnalyser = audioContext.createAnalyser(); outAnalyser.fftSize = 1024;
@@ -637,14 +678,10 @@
                 chopperGain = audioContext.createGain(); chopperGain.gain.value = 0.5; 
                 chopperOsc.connect(chopperGain); chopperOsc.start();
 
-                // Connect Main Signal Chain
                 micBypassGain.connect(liveMathNode);
                 filteredGain.connect(liveMathNode);
                 
-                // Connect Main Math Node Output (0)
                 liveMathNode.connect(outAnalyser, 0, 0);
-                
-                // Connect Isolated AuraConv Output (1) to Visualizer
                 liveMathNode.connect(auraAnalyser, 1, 0);
                 
                 outAnalyser.connect(fxHubIn);
@@ -663,7 +700,7 @@
                 isRunning = true;
                 lastMeterUpdate = performance.now();
                 
-                for(let i=0; i<ENGINE_COUNT; i++) { if(document.getElementById(`eng-active-${i}`).checked && document.getElementById(`card-${i}`).style.display !== 'none') document.getElementById(`led-${i}`).classList.add('on'); }
+                for(let i=0; i<ENGINE_COUNT; i++) { if(uiActiveEls[i].checked && document.getElementById(`card-${i}`).style.display !== 'none') document.getElementById(`led-${i}`).classList.add('on'); }
 
                 masterCanvas.width = masterCanvas.clientWidth; masterCanvas.height = masterCanvas.clientHeight;
                 fftCanvas.width = fftCanvas.clientWidth; fftCanvas.height = fftCanvas.clientHeight;
@@ -764,7 +801,6 @@
                 panner.positionZ.setValueAtTime(Math.cos(t * 2.0) * 2, t);
             }
 
-            // DB Meter Updates
             if (timestamp - lastMeterUpdate > 100) {
                 rawAnalyser.getFloatTimeDomainData(rawTimeData);
                 postGainAnalyser.getFloatTimeDomainData(postTimeData);
@@ -779,7 +815,6 @@
                 lastMeterUpdate = timestamp;
             }
 
-            // 1. MASTER OSCILLOSCOPE
             outAnalyser.getFloatTimeDomainData(outDataArray);
             let dataLength = outDataArray.length;
             masterCtx.fillStyle = '#000000'; masterCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
@@ -792,7 +827,6 @@
             }
             masterCtx.stroke();
 
-            // 2. FFT BANDPASS GRAPH
             rawAnalyser.getByteFrequencyData(rawFreqData);
             filteredAnalyser.getByteFrequencyData(filteredFreqData);
 
@@ -816,17 +850,12 @@
             }
             fftCtx.strokeStyle = 'var(--bp)'; fftCtx.lineWidth = 2; fftCtx.stroke();
             
-            // 3. AURACONV ANALYSIS DASHBOARD (Oscilloscope)
-            // Grab pre-math, pre-aura input from the filtered analyser to act as "Before" state
             filteredAnalyser.getFloatTimeDomainData(rawTimeData); 
             auraAnalyser.getFloatTimeDomainData(auraTimeData);
             
             auraTimeCtx.fillStyle = '#000000'; auraTimeCtx.fillRect(0, 0, auraTimeCanvas.width, auraTimeCanvas.height);
-            dataLength = rawTimeData.length;
-            sliceWidth = auraTimeCanvas.width / dataLength;
-            heightHalf = auraTimeCanvas.height / 2;
+            dataLength = rawTimeData.length; sliceWidth = auraTimeCanvas.width / dataLength; heightHalf = auraTimeCanvas.height / 2;
             
-            // Draw "Before" AuraConv (Gray)
             auraTimeCtx.lineWidth = 1; auraTimeCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; auraTimeCtx.beginPath();
             x = 0;
             for (let i = 0; i < dataLength; i++) {
@@ -835,7 +864,6 @@
             }
             auraTimeCtx.stroke();
             
-            // Draw "After" AuraConv (Cyan)
             auraTimeCtx.lineWidth = 1.5; auraTimeCtx.strokeStyle = 'var(--aura)'; auraTimeCtx.beginPath();
             x = 0;
             for (let i = 0; i < dataLength; i++) {
@@ -844,11 +872,9 @@
             }
             auraTimeCtx.stroke();
 
-            // 4. AURACONV ANALYSIS DASHBOARD (FFT Comb Harmonics)
             auraAnalyser.getByteFrequencyData(auraFreqData);
             auraFFTCtx.fillStyle = '#000000'; auraFFTCtx.fillRect(0, 0, auraFFTCanvas.width, auraFFTCanvas.height);
             
-            // Draw "Before" AuraConv FFT (Gray)
             auraFFTCtx.beginPath(); auraFFTCtx.moveTo(0, auraFFTCanvas.height);
             for(let i = 0; i < fftLen; i++) {
                 const v = filteredFreqData[i] / 255.0;
@@ -857,7 +883,6 @@
             auraFFTCtx.lineTo(auraFFTCanvas.width, auraFFTCanvas.height);
             auraFFTCtx.fillStyle = 'rgba(255, 255, 255, 0.2)'; auraFFTCtx.fill();
 
-            // Draw "After" AuraConv FFT (Cyan)
             auraFFTCtx.beginPath();
             for(let i = 0; i < fftLen; i++) {
                 const v = auraFreqData[i] / 255.0;
@@ -868,7 +893,9 @@
         }
 
         document.getElementById('mic-btn').addEventListener('click', toggleMic);
+        
+        // Initial setup for the UI defaults
         document.getElementById('apply-master-engines-btn').click();
     </script>
 </body>
-</html>
+    </html>
