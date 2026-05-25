@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MicScaler - 20-Engine Data Array (v1.26.0)</title>
+    <title>MicScaler - 20-Engine Data Array (v1.27.0)</title>
     <style>
         :root {
             --bg: #121212; --surface: #1e1e1e; --primary: #bb86fc;
@@ -13,6 +13,12 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
         .header { text-align: center; margin-bottom: 10px; width: 100%; max-width: 800px; }
         
+        /* PRE-FLIGHT BIOS OVERLAY */
+        #boot-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        .boot-window { background: var(--surface); border: 2px solid var(--info); border-radius: 8px; width: 90%; max-width: 600px; padding: 20px; font-family: monospace; color: var(--text); box-shadow: 0 0 20px rgba(3, 218, 198, 0.2); }
+        .boot-title { font-size: 1.2em; border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 10px; color: var(--info); }
+        .boot-line { margin: 8px 0; font-size: 0.95em; }
+
         .canvas-row { display: flex; flex-wrap: wrap; gap: 15px; width: 100%; max-width: 1400px; justify-content: center; margin-bottom: 15px; }
         .canvas-container { flex: 1 1 300px; display: flex; flex-direction: column; width: 100%; max-width: 600px; }
         .canvas-label { font-size: 0.85em; color: var(--info); margin-bottom: 5px; font-weight: bold; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
@@ -47,9 +53,17 @@
 </head>
 <body>
 
+    <!-- BOOT OVERLAY (PRE-FLIGHT DIAGNOSTIC) -->
+    <div id="boot-overlay">
+        <div class="boot-window">
+            <div class="boot-title">MicScaler Engine Initialization</div>
+            <div id="boot-log"></div>
+            <button id="boot-close-btn" style="display:none; margin-top: 15px; width: 100%;">Close Diagnostic</button>
+        </div>
+    </div>
+
     <div class="header">
-        <!-- VERSION NUMBER ADDED TO MAIN HEADER -->
-        <h1>MicScaler <span style="font-size: 0.5em; color: var(--info);">v1.26.0</span></h1>
+        <h1>MicScaler <span style="font-size: 0.5em; color: var(--info);">v1.27.0</span></h1>
         <p>Mathematical Multiplicative Scaling Engine (20-Engine Array)</p>
     </div>
 
@@ -197,7 +211,7 @@
     <script>
         const ENGINE_COUNT = 20; 
 
-        // --- 1. AUDIOWORKLET INJECTION (SAMPLE-ACCURATE LFO) ---
+        // --- 1. AUDIOWORKLET INJECTION (WITH PING/PONG HANDSHAKE) ---
         const workletCode = `
         class MicScalerProcessor extends AudioWorkletProcessor {
             constructor() {
@@ -223,6 +237,12 @@
                 };
 
                 this.port.onmessage = (e) => {
+                    // HANDSHAKE VERIFICATION
+                    if (e.data.type === 'ping') {
+                        this.port.postMessage({ type: 'pong' });
+                        return;
+                    }
+
                     if (e.data.type === 'config') {
                         this.config = { ...this.config, ...e.data };
                     }
@@ -585,6 +605,7 @@
             currentOut.connect(fxHubOut);
         }
 
+        // --- THE PRE-FLIGHT BOOT SEQUENCE ---
         async function toggleMic() {
             if (isRunning) {
                 if (isRecording) stopRecording();
@@ -598,31 +619,83 @@
                 return;
             }
 
+            const bootOverlay = document.getElementById('boot-overlay');
+            const bootLog = document.getElementById('boot-log');
+            const bootCloseBtn = document.getElementById('boot-close-btn');
+            bootOverlay.style.display = 'flex';
+            bootCloseBtn.style.display = 'none';
+            bootLog.innerHTML = '';
+
+            const updateLog = (id, text, status) => {
+                let el = document.getElementById(id);
+                if (!el) { el = document.createElement('div'); el.id = id; el.className = 'boot-line'; bootLog.appendChild(el); }
+                let color = status === 'WAIT' ? 'var(--warn)' : status === 'OK' ? 'var(--led-on)' : 'var(--danger)';
+                el.innerHTML = `<span style="color:${color}">[${status}]</span> ${text}`;
+                return el;
+            };
+
+            bootCloseBtn.onclick = () => { bootOverlay.style.display = 'none'; };
+
             try {
+                updateLog('step1', 'Requesting Microphone Hardware...', 'WAIT');
                 const useEcho = echoToggle.checked;
                 stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: useEcho, noiseSuppression: useEcho, autoGainControl: useEcho } });
+                updateLog('step1', 'Microphone Hardware Secured.', 'OK');
+
+                updateLog('step2', 'Initializing AudioContext...', 'WAIT');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                updateLog('step2', `AudioContext Running (${audioContext.sampleRate}Hz).`, 'OK');
+
+                updateLog('step3', 'Compiling AudioWorklet Blob...', 'WAIT');
                 await audioContext.audioWorklet.addModule(workletUrl);
-                
+                updateLog('step3', 'AudioWorklet Compiled.', 'OK');
+
                 microphone = audioContext.createMediaStreamSource(stream);
+                liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor', { numberOfInputs: 1, numberOfOutputs: 2 });
                 
+                // THE IPC HANDSHAKE (Ping/Pong)
+                updateLog('step4', 'Establishing IPC Handshake...', 'WAIT');
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error("IPC Handshake Timeout: Mobile CPU Thread Hung.")), 4000);
+                    const pingListener = (e) => {
+                        if (e.data.type === 'pong') {
+                            clearTimeout(timeout);
+                            liveMathNode.port.removeEventListener('message', pingListener);
+                            resolve();
+                        }
+                    };
+                    liveMathNode.port.addEventListener('message', pingListener);
+                    liveMathNode.port.start();
+                    liveMathNode.port.postMessage({ type: 'ping' });
+                });
+                updateLog('step4', 'IPC Handshake Successful.', 'OK');
+
+                updateLog('step5', 'Injecting 20-Engine Data Array...', 'WAIT');
+                
+                // Re-bind the main operational message listener
+                liveMathNode.port.onmessage = (e) => {
+                    if (e.data.type === 'status') {
+                        for(let i=0; i<ENGINE_COUNT; i++) {
+                            if(uiActiveEls[i].checked) uiReadoutEls[i].innerText = e.data.steps[i].toFixed(4);
+                        }
+                    }
+                };
+
+                // Setup Pre-Gain & Metering
                 preGainNode = audioContext.createGain();
                 const initVol = parseFloat(document.getElementById('mic-vol-pct').value) || 100;
                 preGainNode.gain.value = initVol / 100.0;
 
                 rawAnalyser = audioContext.createAnalyser(); rawAnalyser.fftSize = 2048;
                 postGainAnalyser = audioContext.createAnalyser(); postGainAnalyser.fftSize = 2048;
-
                 hpFilter = audioContext.createBiquadFilter(); hpFilter.type = 'highpass';
                 lpFilter = audioContext.createBiquadFilter(); lpFilter.type = 'lowpass';
                 filteredAnalyser = audioContext.createAnalyser(); filteredAnalyser.fftSize = 2048;
-                
                 auraAnalyser = audioContext.createAnalyser(); auraAnalyser.fftSize = 2048;
                 
                 rawFreqData = new Uint8Array(rawAnalyser.frequencyBinCount);
                 filteredFreqData = new Uint8Array(filteredAnalyser.frequencyBinCount);
                 auraFreqData = new Uint8Array(auraAnalyser.frequencyBinCount);
-                
                 rawTimeData = new Float32Array(rawAnalyser.frequencyBinCount);
                 postTimeData = new Float32Array(postGainAnalyser.frequencyBinCount);
                 auraTimeData = new Float32Array(auraAnalyser.frequencyBinCount);
@@ -633,27 +706,16 @@
                 microphone.connect(rawAnalyser);
                 microphone.connect(preGainNode);
                 preGainNode.connect(postGainAnalyser);
-                
                 preGainNode.connect(hpFilter); hpFilter.connect(lpFilter); lpFilter.connect(filteredAnalyser);
                 preGainNode.connect(micBypassGain);
                 lpFilter.connect(filteredGain);
 
-                liveMathNode = new AudioWorkletNode(audioContext, 'micscaler-processor', { numberOfInputs: 1, numberOfOutputs: 2 });
-                liveMathNode.port.onmessage = (e) => {
-                    if (e.data.type === 'status') {
-                        for(let i=0; i<ENGINE_COUNT; i++) {
-                            if(uiActiveEls[i].checked) uiReadoutEls[i].innerText = e.data.steps[i].toFixed(4);
-                        }
-                    }
-                };
-
                 updateBandpass();
                 updateGlobalWorklet();
-                document.getElementById('apply-master-engines-btn').click();
+                document.getElementById('apply-master-engines-btn').click(); // Triggers bulk upload
 
                 outAnalyser = audioContext.createAnalyser(); outAnalyser.fftSize = 1024;
                 outDataArray = new Float32Array(outAnalyser.frequencyBinCount);
-
                 fxHubIn = audioContext.createGain(); fxHubOut = audioContext.createGain();
                 
                 speakerPreAnalyser = audioContext.createAnalyser(); speakerPreAnalyser.fftSize = 2048;
@@ -664,7 +726,6 @@
                 speakerVolNode = audioContext.createGain();
                 const initOutVol = parseFloat(document.getElementById('out-vol-pct').value) || 100;
                 speakerVolNode.gain.value = initOutVol / 100.0;
-
                 outputGain = audioContext.createGain(); outputGain.gain.value = 1.0;
 
                 convolver = audioContext.createConvolver(); convolver.buffer = generateImpulseResponse(audioContext);
@@ -676,13 +737,10 @@
 
                 micBypassGain.connect(liveMathNode);
                 filteredGain.connect(liveMathNode);
-                
                 liveMathNode.connect(outAnalyser, 0, 0);
                 liveMathNode.connect(auraAnalyser, 1, 0);
-                
                 outAnalyser.connect(fxHubIn);
                 updateFXRouting();
-                
                 fxHubOut.connect(speakerPreAnalyser);
                 speakerPreAnalyser.connect(speakerVolNode);
                 speakerVolNode.connect(speakerPostAnalyser);
@@ -691,6 +749,9 @@
                 if (audioOutputToggle.checked) outputGain.connect(audioContext.destination);
                 updateOutputGate();
 
+                updateLog('step5', 'Engine Configurations Loaded.', 'OK');
+                updateLog('step6', 'Starting Hardware Signal Chain...', 'WAIT');
+                
                 micBtn.innerText = 'Stop Microphone';
                 micBtn.classList.add('active');
                 isRunning = true;
@@ -703,8 +764,18 @@
                 auraTimeCanvas.width = auraTimeCanvas.clientWidth; auraTimeCanvas.height = auraTimeCanvas.clientHeight;
                 auraFFTCanvas.width = auraFFTCanvas.clientWidth; auraFFTCanvas.height = auraFFTCanvas.clientHeight;
                 
-                processVisualizer();
-            } catch (err) { alert('Error accessing microphone: ' + err); }
+                updateLog('step6', 'Hardware Signal Chain Active.', 'OK');
+
+                // Auto-hide the boot screen after success
+                setTimeout(() => { bootOverlay.style.display = 'none'; processVisualizer(); }, 600);
+
+            } catch (err) { 
+                // IF ANYTHING CRASHES, LEAVE OVERLAY OPEN AND PRINT ERROR
+                updateLog('error', err.message, 'FAIL');
+                bootCloseBtn.style.display = 'block';
+                if (audioContext) audioContext.close();
+                isRunning = false;
+            }
         }
 
         // --- RECORDING ENGINE ---
@@ -779,6 +850,13 @@
             document.body.appendChild(a); a.click();
             setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); recordStatus.innerText = "Saved successfully!"; }, 100);
         }
+
+        // --- MASTER VISUALIZERS ---
+        const getDB = (arr) => {
+            let sum = 0; for(let i=0; i<arr.length; i++) sum += arr[i]*arr[i];
+            let rms = Math.sqrt(sum / arr.length);
+            return rms < 0.0001 ? -100 : 20 * Math.log10(rms);
+        };
 
         function processVisualizer(timestamp) {
             if (!isRunning) return;
@@ -880,9 +958,6 @@
             }
             auraFFTCtx.strokeStyle = 'var(--aura)'; auraFFTCtx.lineWidth = 1.5; auraFFTCtx.stroke();
         }
-
-        document.getElementById('mic-btn').addEventListener('click', toggleMic);
-        document.getElementById('apply-master-engines-btn').click();
     </script>
 </body>
 </html>
