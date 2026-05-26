@@ -2,6 +2,11 @@
 
 MicScaler is a professional-grade, zero-dependency web application designed for high-throughput mathematical processing of live audio data. It transforms your browser into a **20,000-channel mathematical processor**.
 
+## Demos - Hosted on Cloudflare
+- v1.22.0
+- v1.21.0 - https://v1-21-0-aurascaler.pages.dev/
+- v1.20.0
+  
 ## 🚀 Quick Start
 1. Download the `index.html` file.
 2. Open it in Chrome, Edge, or Safari.
